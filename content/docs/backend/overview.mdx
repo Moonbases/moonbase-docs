@@ -3,20 +3,22 @@ title: Backend Runtime Overview
 description: How the API loads and runs plugins.
 ---
 
-The backend plugin loader scans for JavaScript plugins at startup.
+The backend plugin loader scans for JavaScript plugins at startup and loads them in order.
 
 ## Plugin locations
 The loader checks these directories (first match wins):
 
 - `plugins`
 - `api/plugins`
-- `api/src/plugins/plugins`
+- the packaged plugins directory next to the loader (internal fallback)
 
 In most cases you should place plugins in `api/plugins`.
+Plugins load in alphabetical order by filename.
 
 ## Supported files
 - `.js`, `.cjs`, `.mjs`
 - or a folder with `index.js` (or `index.cjs`, `index.mjs`)
+- entries starting with `_` or `.` are ignored
 
 ## Plugin shape
 ```js
@@ -30,6 +32,8 @@ module.exports = {
 };
 ```
 
+If you omit `name`, the filename becomes the plugin name.
+
 You can also export a function directly:
 
 ```js
@@ -37,6 +41,8 @@ module.exports = function register(ctx) {
   // ...
 };
 ```
+
+`init(ctx)` is treated the same as `register(ctx)`.
 
 The loader logs successful and failed plugins at startup.
 If `enabled` is `false`, the plugin is skipped and the API logs that it is disabled.

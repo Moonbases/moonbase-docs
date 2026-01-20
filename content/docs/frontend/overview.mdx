@@ -11,6 +11,20 @@ The frontend plugin runtime lives in `app/lib/plugins` and runs in the browser. 
 - Each plugin may run `bootstrap(ctx)` once and return a cleanup function.
 - The registry (`app/plugins/registry.ts`) exports the plugin list used by the runtime.
 
+## Registration
+Add new frontend plugins to the registry so the runtime can pick them up.
+
+```ts
+// app/plugins/registry.ts
+import myPlugin from './my-plugin';
+
+export const plugins = [myPlugin];
+```
+
+The list order is the execution order for slots and bootstrap hooks.
+
+Frontend plugins run in the browser. Add `use client` to plugin files that use hooks or browser APIs.
+
 ## Plugin shape
 ```tsx
 import type { FrontendPlugin } from '@/lib/plugins/types';

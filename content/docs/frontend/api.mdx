@@ -6,7 +6,7 @@ description: Use API, storage, and event helpers from plugins.
 Each plugin receives a `ctx` object through slots and bootstrap.
 
 ## API
-`ctx.api` sends requests to `/api/proxy` and adds the current auth token.
+`ctx.api` sends requests to `/api/proxy`, adds the current auth token as a `Token` header, and includes credentials.
 
 ## Storage
 Use localStorage, sessionStorage, and cookies safely.
