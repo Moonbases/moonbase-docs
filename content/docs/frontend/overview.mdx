@@ -1,0 +1,42 @@
+---
+title: Frontend Runtime Overview
+description: How frontend plugins are loaded and bootstrapped.
+---
+
+The frontend plugin runtime lives in `app/lib/plugins` and runs in the browser. Plugin implementations live in `app/plugins` and are registered in `app/plugins/registry.ts`.
+
+## Lifecycle
+- `PluginHost` in `app/lib/plugins/PluginHost.tsx` wraps the application.
+- `PluginProvider` creates the plugin context (API, storage, events, route).
+- Each plugin may run `bootstrap(ctx)` once and return a cleanup function.
+- The registry (`app/plugins/registry.ts`) exports the plugin list used by the runtime.
+
+## Plugin shape
+```tsx
+import type { FrontendPlugin } from '@/lib/plugins/types';
+
+const plugin: FrontendPlugin = {
+  name: 'my-plugin',
+  version: '0.1.0',
+  enabled: true,
+  bootstrap: (ctx) => {
+    ctx.logger.info('plugin booted');
+    return () => ctx.logger.info('plugin cleaned up');
+  },
+  slots: {
+    global: ({ ctx }) => <div>Global UI</div>
+  },
+  mounts: [
+    {
+      selector: '[data-plugin-anchor="checkout-summary"]',
+      component: ({ ctx }) => <div>Injected UI</div>,
+      order: 10
+    }
+  ]
+};
+
+export default plugin;
+```
+
+## Enabling and disabling
+`enabled` can be a boolean or a function. When `enabled` returns false, the plugin is skipped.

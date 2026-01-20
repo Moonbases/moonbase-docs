@@ -1,0 +1,15 @@
+{
+  "title": "Moonbase Plugins",
+  "root": true,
+  "pages": [
+    "index",
+    "getting-started",
+    "---Frontend Runtime---",
+    "...frontend",
+    "---Backend Runtime---",
+    "...backend",
+    "---Examples---",
+    "examples",
+    "troubleshooting"
+  ]
+}

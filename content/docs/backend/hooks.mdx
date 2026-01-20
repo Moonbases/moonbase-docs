@@ -1,0 +1,26 @@
+---
+title: Backend Hooks
+description: Run logic when routes are ready or on shutdown.
+---
+
+The backend loader exposes two hook points:
+
+- `hooks.onRoutesReady(callback)`
+- `hooks.onShutdown(callback)`
+
+Use them for actions that must wait until routes are registered or for cleanup.
+
+```js
+module.exports = {
+  name: 'cleanup-example',
+  register(ctx) {
+    ctx.hooks.onRoutesReady(() => {
+      ctx.logger.info('routes ready');
+    });
+
+    ctx.hooks.onShutdown(() => {
+      ctx.logger.info('api shutting down');
+    });
+  }
+};
+```

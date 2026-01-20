@@ -1,0 +1,8 @@
+{
+  "title": "Backend Plugins",
+  "pages": [
+    "overview",
+    "context",
+    "hooks"
+  ]
+}

@@ -1,0 +1,21 @@
+---
+title: Moonbase Plugin System
+description: Extend the backend and frontend without touching core code.
+---
+
+Moonbase ships with two plugin runtimes: a backend loader for the API and a frontend runtime for the Next.js app. Plugins live outside the bundled output, so they are easy to add or remove.
+
+## Two runtimes
+- Backend plugins run inside the API and can register routes, patch services, or listen to purchase flows.
+- Frontend plugins run inside the app and can render UI, open modals, and block checkout via guards.
+
+## What a plugin can do
+- Add new API endpoints and middleware.
+- Inject UI into existing pages or global layout.
+- Validate checkout prerequisites before payment.
+
+## Quick links
+- [Getting started](./getting-started)
+- [Frontend runtime overview](./frontend/overview)
+- [Backend runtime overview](./backend/overview)
+- [Examples](./examples)

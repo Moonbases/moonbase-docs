@@ -1,0 +1,42 @@
+---
+title: Backend Runtime Overview
+description: How the API loads and runs plugins.
+---
+
+The backend plugin loader scans for JavaScript plugins at startup.
+
+## Plugin locations
+The loader checks these directories (first match wins):
+
+- `plugins`
+- `api/plugins`
+- `api/src/plugins/plugins`
+
+In most cases you should place plugins in `api/plugins`.
+
+## Supported files
+- `.js`, `.cjs`, `.mjs`
+- or a folder with `index.js` (or `index.cjs`, `index.mjs`)
+
+## Plugin shape
+```js
+module.exports = {
+  name: 'my-plugin',
+  enabled: true,
+  version: '0.1.0',
+  register(ctx) {
+    ctx.logger.info('plugin loaded');
+  }
+};
+```
+
+You can also export a function directly:
+
+```js
+module.exports = function register(ctx) {
+  // ...
+};
+```
+
+The loader logs successful and failed plugins at startup.
+If `enabled` is `false`, the plugin is skipped and the API logs that it is disabled.

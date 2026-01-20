@@ -1,0 +1,9 @@
+{
+  "title": "Frontend Plugins",
+  "pages": [
+    "overview",
+    "slots-and-portals",
+    "api",
+    "checkout-guards"
+  ]
+}

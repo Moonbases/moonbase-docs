@@ -1,0 +1,38 @@
+---
+title: Plugin Context API
+description: Use API, storage, and event helpers from plugins.
+---
+
+Each plugin receives a `ctx` object through slots and bootstrap.
+
+## API
+`ctx.api` sends requests to `/api/proxy` and adds the current auth token.
+
+## Storage
+Use localStorage, sessionStorage, and cookies safely.
+
+```ts
+ctx.storage.set('myKey', 'value');
+ctx.storage.setCookie('myCookie', 'value', { maxAge: 3600 });
+```
+
+## Events
+Plugins can communicate using a simple event bus.
+
+```ts
+const unsubscribe = ctx.events.on('route:change', (route) => {
+  ctx.logger.info('route changed', route);
+});
+```
+
+## Route info
+```ts
+const { pathname, search } = ctx.route.get();
+```
+
+## Checkout guards
+```ts
+ctx.checkout.registerGuard(async (context) => {
+  return true;
+});
+```

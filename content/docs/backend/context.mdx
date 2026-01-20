@@ -1,0 +1,55 @@
+---
+title: Backend Plugin Context
+description: What the backend ctx object provides.
+---
+
+Every backend plugin gets a `PluginContext` object.
+
+## Core fields
+- `app`: Express app instance.
+- `env`: `process.env`.
+- `logger`: Moonbase logger.
+- `paths`: `rootDir`, `pluginsDir`.
+
+## Routers
+- `routers.api`
+- `routers.dashboard`
+- `routers.purchase`
+
+## Services
+- `services.API` (database access)
+- `services.stripe`
+- `services.coinbaseCommerce`
+- `services.paypalCheckout`
+- `services.emailService`
+
+## Modules and core
+- `modules.purchase` (route module; can be wrapped or patched)
+- `core.controllers`, `core.models`, `core.helpers`, `core.utils`
+
+## Example: add a route
+```js
+module.exports = {
+  name: 'status-endpoint',
+  register(ctx) {
+    ctx.routers.api.get('/plugins/status', (_req, res) => {
+      res.json({ status_overview: 'success', status_message: 'OK' });
+    });
+  }
+};
+```
+
+## Example: patch a service
+```js
+module.exports = {
+  name: 'stripe-tagger',
+  register(ctx) {
+    const original = ctx.services.stripe.checkout.sessions.create.bind(
+      ctx.services.stripe.checkout.sessions
+    );
+    ctx.services.stripe.checkout.sessions.create = async (params, options) => {
+      return original({ ...params, metadata: { ...params.metadata, tag: 'plugin' } }, options);
+    };
+  }
+};
+```
