@@ -19,13 +19,6 @@ export default function HomePage() {
             <Rocket className="size-4" />
             Get Started
           </Link>
-          <Link
-            href="/docs"
-            className="inline-flex items-center gap-2 px-5 py-2.5 underline-offset-4 hover:underline"
-          >
-            <Puzzle className="size-4" />
-            Documentation
-          </Link>
         </div>
       </div>
 
