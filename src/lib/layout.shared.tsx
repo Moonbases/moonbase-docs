@@ -10,36 +10,24 @@ const guideUrls = new Set(guideSource.getPages().map((page) => page.url));
 export const docsTabs: SidebarTabWithProps[] = [
   {
     title: 'Moonbase Guide',
-    description: 'Install, setup, and payments for self-hosted Moonbase.',
+    description: 'Get Moonbase up and running.',
     url: '/docs/guide',
     urls: guideUrls,
-    icon: (
-      <span className="docs-tab-icon docs-tab-icon--guide">
-        <Rocket className="size-4" />
-      </span>
-    ),
+    icon: <Rocket className="size-4 text-teal-600 dark:text-teal-400" />,
   },
   {
     title: 'Plugin Docs',
-    description: 'Extend Moonbase with backend and frontend plugins.',
+    description: 'Extend Moonbase easily.',
     url: '/docs/plugin',
     urls: pluginUrls,
-    icon: (
-      <span className="docs-tab-icon docs-tab-icon--plugin">
-        <Package className="size-4" />
-      </span>
-    ),
+    icon: <Package className="size-4 text-blue-600 dark:text-blue-300" />,
   },
   {
     title: 'API Docs',
-    description: 'REST endpoints, auth, and request examples.',
+    description: 'Integrate Moonbase with your app.',
     url: '/docs/api',
     urls: apiUrls,
-    icon: (
-      <span className="docs-tab-icon docs-tab-icon--api">
-        <Server className="size-4" />
-      </span>
-    ),
+    icon: <Server className="size-4 text-rose-600 dark:text-rose-400" />,
   },
 ];
 
