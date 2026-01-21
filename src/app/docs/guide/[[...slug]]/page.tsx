@@ -5,6 +5,7 @@ import { getMDXComponents } from '@/mdx-components';
 import type { Metadata } from 'next';
 import { createRelativeLink } from 'fumadocs-ui/mdx';
 import { LLMCopyButton, ViewOptions } from '@/components/ai/page-actions';
+import { SteppedToc } from '@/components/toc/stepped-toc';
 
 export default async function Page(props: PageProps<'/docs/guide/[[...slug]]'>) {
   const params = await props.params;
@@ -19,7 +20,12 @@ export default async function Page(props: PageProps<'/docs/guide/[[...slug]]'>) 
   };
 
   return (
-    <DocsPage toc={page.data.toc} full={page.data.full}>
+    <DocsPage
+      toc={page.data.toc}
+      full={page.data.full}
+      tableOfContent={{ component: <SteppedToc toc={page.data.toc} /> }}
+      tableOfContentPopover={{ style: 'clerk' }}
+    >
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription className="mb-0">{page.data.description}</DocsDescription>
       <div className="flex flex-row gap-2 items-center border-b pb-6">

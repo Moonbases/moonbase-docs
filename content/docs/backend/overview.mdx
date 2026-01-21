@@ -8,41 +8,54 @@ The backend plugin loader scans for JavaScript plugins at startup and loads them
 ## Plugin locations
 The loader checks these directories (first match wins):
 
-- `plugins`
-- `api/plugins`
-- the packaged plugins directory next to the loader (internal fallback)
+<Steps>
+  <Step>`plugins`</Step>
+  <Step>`api/plugins`</Step>
+  <Step>the packaged plugins directory next to the loader (internal fallback)</Step>
+</Steps>
 
-In most cases you should place plugins in `api/plugins`.
-Plugins load in alphabetical order by filename.
+<Callout type="info" title="Recommended location">
+  In most cases you should place plugins in `api/plugins`.
+</Callout>
+
+<Callout type="note" title="Load order">
+  Plugins load in alphabetical order by filename.
+</Callout>
 
 ## Supported files
-- `.js`, `.cjs`, `.mjs`
-- or a folder with `index.js` (or `index.cjs`, `index.mjs`)
-- entries starting with `_` or `.` are ignored
+<Cards>
+  <Card title="File types" description="`.js`, `.cjs`, or `.mjs`" />
+  <Card title="Folder entry" description="Folder with `index.js`, `index.cjs`, or `index.mjs`" />
+  <Card title="Ignored entries" description="Names starting with `_` or `.` are skipped" />
+</Cards>
 
 ## Plugin shape
-```js
-module.exports = {
-  name: 'my-plugin',
-  enabled: true,
-  version: '0.1.0',
-  register(ctx) {
-    ctx.logger.info('plugin loaded');
-  }
-};
-```
+<Tabs items={['Object export', 'Function export']} defaultIndex={0}>
+  <Tab>
+    ```js
+    module.exports = {
+      name: 'my-plugin',
+      enabled: true,
+      version: '0.1.0',
+      register(ctx) {
+        ctx.logger.info('plugin loaded');
+      }
+    };
+    ```
+  </Tab>
+  <Tab>
+    ```js
+    module.exports = function register(ctx) {
+      // ...
+    };
+    ```
+  </Tab>
+</Tabs>
 
-If you omit `name`, the filename becomes the plugin name.
+<Callout type="info" title="Naming and lifecycle">
+  If you omit `name`, the filename becomes the plugin name. `init(ctx)` is treated the same as `register(ctx)`.
+</Callout>
 
-You can also export a function directly:
-
-```js
-module.exports = function register(ctx) {
-  // ...
-};
-```
-
-`init(ctx)` is treated the same as `register(ctx)`.
-
-The loader logs successful and failed plugins at startup.
-If `enabled` is `false`, the plugin is skipped and the API logs that it is disabled.
+<Callout type="note" title="Enabled flag and logs">
+  The loader logs successful and failed plugins at startup. If `enabled` is `false`, the plugin is skipped and the API logs that it is disabled.
+</Callout>

@@ -5,40 +5,44 @@ description: Render UI from plugins without editing core pages.
 
 Frontend plugins can render UI in two ways:
 
-## Slots (named render points)
-Slots render wherever the app includes `<PluginSlot name="..." />`. The default host already renders the `global` slot in `app/lib/plugins/PluginHost.tsx`.
+<Tabs items={['Slots', 'Portals']} defaultIndex={0}>
+  <Tab>
+    Slots render wherever the app includes `<PluginSlot name="..." />`. The default host already renders the `global` slot in `app/lib/plugins/PluginHost.tsx`.
 
-```tsx
-const plugin: FrontendPlugin = {
-  name: 'banner',
-  slots: {
-    global: () => (
-      <div className="fixed left-4 bottom-4 rounded bg-black px-3 py-2 text-white">
-        New plugin loaded
-      </div>
-    )
-  }
-};
-```
+    ```tsx
+    const plugin: FrontendPlugin = {
+      name: 'banner',
+      slots: {
+        global: () => (
+          <div className="fixed left-4 bottom-4 rounded bg-black px-3 py-2 text-white">
+            New plugin loaded
+          </div>
+        )
+      }
+    };
+    ```
+  </Tab>
+  <Tab>
+    Portals let plugins mount components into any DOM selector via `mounts`. The runtime uses a `MutationObserver` to wait for the element.
 
-## Portals (DOM selector mounts)
-Portals let plugins mount components into any DOM selector via `mounts`. The runtime uses a `MutationObserver` to wait for the element.
+    ```tsx
+    const plugin: FrontendPlugin = {
+      name: 'checkout-badge',
+      mounts: [
+        {
+          selector: '[data-checkout-summary]',
+          component: () => <span className="ml-2 text-xs">Verified</span>,
+          once: true,
+          order: 20
+        }
+      ]
+    };
+    ```
+  </Tab>
+</Tabs>
 
-```tsx
-const plugin: FrontendPlugin = {
-  name: 'checkout-badge',
-  mounts: [
-    {
-      selector: '[data-checkout-summary]',
-      component: () => <span className="ml-2 text-xs">Verified</span>,
-      once: true,
-      order: 20
-    }
-  ]
-};
-```
-
-Notes:
-- Prefer stable `data-` attributes for selectors.
-- `once: true` stops observing after the first successful mount.
-- `order` controls rendering order when multiple plugins target the same element.
+<Callout type="note" title="Selector and ordering tips">
+  - Prefer stable `data-` attributes for selectors.
+  - `once: true` stops observing after the first successful mount.
+  - `order` controls rendering order when multiple plugins target the same element.
+</Callout>

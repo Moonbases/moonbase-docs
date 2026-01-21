@@ -5,38 +5,45 @@ description: Block checkout until a plugin validates prerequisites.
 
 Checkout guards run inside the API helper methods:
 
-- `app/lib/api.ts:createCheckoutSession`
-- `app/lib/api.ts:createCartCheckout`
+<Callout type="info" title="Guard entry points">
+  - `app/lib/api.ts:createCheckoutSession`
+  - `app/lib/api.ts:createCartCheckout`
+</Callout>
 
 If you trigger checkout by calling the API directly, call `runCheckoutGuards` first.
 
-## Guard context
-```ts
-type CheckoutGuardContext = {
-  type: 'cart' | 'product';
-  items?: Array<{ productId: string; plan?: string; quantity?: number }>;
-  productId?: string;
-  plan?: string;
-  paymentMethod?: string;
-};
-```
-
-## Example
-```tsx
-const plugin: FrontendPlugin = {
-  name: 'license-guard',
-  bootstrap: (ctx) => {
-    return ctx.checkout.registerGuard(async (context) => {
-      if (context?.type === 'product') {
-        const response = await ctx.api.post('/api/plugins/license/check', {
-          productId: context.productId
+<Tabs items={['Guard context', 'Example']} defaultIndex={0}>
+  <Tab>
+    ```ts
+    type CheckoutGuardContext = {
+      type: 'cart' | 'product';
+      items?: Array<{ productId: string; plan?: string; quantity?: number }>;
+      productId?: string;
+      plan?: string;
+      paymentMethod?: string;
+    };
+    ```
+  </Tab>
+  <Tab>
+    ```tsx
+    const plugin: FrontendPlugin = {
+      name: 'license-guard',
+      bootstrap: (ctx) => {
+        return ctx.checkout.registerGuard(async (context) => {
+          if (context?.type === 'product') {
+            const response = await ctx.api.post('/api/plugins/license/check', {
+              productId: context.productId
+            });
+            return response.ok;
+          }
+          return true;
         });
-        return response.ok;
       }
-      return true;
-    });
-  }
-};
-```
+    };
+    ```
+  </Tab>
+</Tabs>
 
-Return `false` to cancel checkout.
+<Callout type="warning" title="Guard outcome">
+  Return `false` to cancel checkout.
+</Callout>

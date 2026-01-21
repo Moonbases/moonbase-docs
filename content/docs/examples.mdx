@@ -3,65 +3,76 @@ title: Examples
 description: Example plugins for frontend and backend.
 ---
 
-## Frontend: add a checkout helper modal
-```tsx
-import type { FrontendPlugin, PluginSlotProps } from '@/lib/plugins/types';
+<Tabs items={['Frontend examples', 'Backend examples']} defaultIndex={0}>
+  <Tab>
+    <Accordions type="single" collapsible>
+      <Accordion title="Add a checkout helper modal">
+        ```tsx
+        import type { FrontendPlugin, PluginSlotProps } from '@/lib/plugins/types';
 
-const HelperModal = ({ ctx }: PluginSlotProps) => {
-  return <div className="fixed inset-0">Helper UI</div>;
-};
+        const HelperModal = ({ ctx }: PluginSlotProps) => {
+          return <div className="fixed inset-0">Helper UI</div>;
+        };
 
-const plugin: FrontendPlugin = {
-  name: 'checkout-helper',
-  slots: { global: HelperModal },
-  bootstrap: (ctx) => {
-    return ctx.checkout.registerGuard(async () => {
-      return true;
-    });
-  }
-};
+        const plugin: FrontendPlugin = {
+          name: 'checkout-helper',
+          slots: { global: HelperModal },
+          bootstrap: (ctx) => {
+            return ctx.checkout.registerGuard(async () => {
+              return true;
+            });
+          }
+        };
 
-export default plugin;
-```
+        export default plugin;
+        ```
 
-Remember to add the plugin to `app/plugins/registry.ts` so the frontend runtime loads it.
-
-## Frontend: mount into an existing element
-```tsx
-const plugin: FrontendPlugin = {
-  name: 'summary-note',
-  mounts: [
-    {
-      selector: '[data-checkout-summary]',
-      component: () => <div className="text-xs text-muted-foreground">Note from plugin</div>
-    }
-  ]
-};
-```
-
-## Backend: add a custom endpoint
-```js
-module.exports = {
-  name: 'audit-log',
-  register(ctx) {
-    ctx.routers.api.post('/plugins/audit', (req, res) => {
-      ctx.logger.info('audit event', req.body);
-      res.json({ status_overview: 'success' });
-    });
-  }
-};
-```
-
-## Backend: intercept a purchase flow
-```js
-module.exports = {
-  name: 'purchase-tag',
-  register(ctx) {
-    const original = ctx.modules.purchase.webhook;
-    ctx.modules.purchase.webhook = async (req, res) => {
-      await original(req, res);
-      ctx.logger.info('purchase webhook handled');
-    };
-  }
-};
-```
+        Remember to add the plugin to `app/plugins/registry.ts` so the frontend runtime loads it.
+      </Accordion>
+      <Accordion title="Mount into an existing element">
+        ```tsx
+        const plugin: FrontendPlugin = {
+          name: 'summary-note',
+          mounts: [
+            {
+              selector: '[data-checkout-summary]',
+              component: () => <div className="text-xs text-muted-foreground">Note from plugin</div>
+            }
+          ]
+        };
+        ```
+      </Accordion>
+    </Accordions>
+  </Tab>
+  <Tab>
+    <Accordions type="single" collapsible>
+      <Accordion title="Add a custom endpoint">
+        ```js
+        module.exports = {
+          name: 'audit-log',
+          register(ctx) {
+            ctx.routers.api.post('/plugins/audit', (req, res) => {
+              ctx.logger.info('audit event', req.body);
+              res.json({ status_overview: 'success' });
+            });
+          }
+        };
+        ```
+      </Accordion>
+      <Accordion title="Intercept a purchase flow">
+        ```js
+        module.exports = {
+          name: 'purchase-tag',
+          register(ctx) {
+            const original = ctx.modules.purchase.webhook;
+            ctx.modules.purchase.webhook = async (req, res) => {
+              await original(req, res);
+              ctx.logger.info('purchase webhook handled');
+            };
+          }
+        };
+        ```
+      </Accordion>
+    </Accordions>
+  </Tab>
+</Tabs>

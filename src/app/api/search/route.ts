@@ -1,23 +1,15 @@
-import { apiSource, guideSource, source } from '@/lib/source';
+import { apiSource, guideSource, source, type AnyDocsPage } from '@/lib/source';
 import { findPath } from 'fumadocs-core/page-tree';
 import { createSearchAPI } from 'fumadocs-core/search/server';
 import path from 'node:path';
 
-type DocsPage = ReturnType<typeof source.getPages>[number];
-type ApiPage = ReturnType<typeof apiSource.getPages>[number];
-type GuidePage = ReturnType<typeof guideSource.getPages>[number];
+type DocsSource = typeof source | typeof apiSource | typeof guideSource;
 
 async function buildIndexForSource(
-  activeSource: typeof source | typeof apiSource | typeof guideSource,
-  page: DocsPage | ApiPage | GuidePage,
+  activeSource: DocsSource,
+  page: AnyDocsPage,
 ) {
-  let structuredData;
-
-  if ('structuredData' in page.data) {
-    structuredData = page.data.structuredData;
-  } else if ('load' in page.data && typeof page.data.load === 'function') {
-    structuredData = (await page.data.load()).structuredData;
-  }
+  const { structuredData } = page.data;
 
   if (!structuredData) {
     throw new Error('Cannot find structured data from page, please define the page to index function.');

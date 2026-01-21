@@ -8,23 +8,45 @@ import { Eye, Link2 } from 'lucide-react';
 Moonbase ships with two plugin runtimes: a backend loader for the API and a frontend runtime for the Next.js app. Backend plugins are loaded from disk at runtime; frontend plugins are compiled into the app and registered explicitly.
 
 ## <Eye className="inline size-4 align-text-bottom" /> At a glance
-- Backend: drop a file in `api/plugins` and restart the API.
-- Frontend: add a plugin under `app/plugins` and register it in `app/plugins/registry.ts`.
+<Cards>
+  <Card
+    title="Backend plugins"
+    href="./backend/overview"
+    description="Drop a file in `api/plugins` and restart the API."
+  />
+  <Card
+    title="Frontend plugins"
+    href="./frontend/overview"
+    description="Add a plugin under `app/plugins` and register it in `app/plugins/registry.ts`."
+  />
+</Cards>
 
 ## Two runtimes
-- Backend plugins run inside the API and can register routes, patch services, or listen to purchase flows.
-- Frontend plugins run inside the app and can render UI, open modals, and block checkout via guards.
+<Tabs items={['Backend runtime', 'Frontend runtime']} defaultIndex={0}>
+  <Tab>
+    - Backend plugins run inside the API and can register routes, patch services, or listen to purchase flows.
+  </Tab>
+  <Tab>
+    - Frontend plugins run inside the app and can render UI, open modals, and block checkout via guards.
+  </Tab>
+</Tabs>
 
-Pick the runtime that matches the change you want: data and workflows in the backend, UI and flow control in the frontend.
+<Callout type="info" title="Pick the right runtime">
+  Choose the backend for data and workflows, and the frontend for UI and flow control.
+</Callout>
 
 ## What a plugin can do
-- Add new API endpoints and middleware.
-- Inject UI into existing pages or global layout.
-- Validate checkout prerequisites before payment.
+<Cards>
+  <Card title="Extend the API" description="Add endpoints, middleware, or background logic." />
+  <Card title="Inject UI" description="Render UI in slots or portals without editing core pages." />
+  <Card title="Guard checkout" description="Validate prerequisites before payment starts." />
+</Cards>
 
 ## <Link2 className="inline size-4 align-text-bottom" /> Quick links
-- [Getting started](./getting-started)
-- [Frontend runtime overview](./frontend/overview)
-- [Backend runtime overview](./backend/overview)
-- [Examples](./examples)
-- [API docs](/docs/api)
+<Cards>
+  <Card title="Getting started" href="./getting-started" />
+  <Card title="Frontend runtime overview" href="./frontend/overview" />
+  <Card title="Backend runtime overview" href="./backend/overview" />
+  <Card title="Examples" href="./examples" />
+  <Card title="API docs" href="/docs/api" />
+</Cards>

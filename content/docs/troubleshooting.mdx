@@ -3,17 +3,24 @@ title: Troubleshooting
 description: Common issues when plugins do not appear or run.
 ---
 
-## Plugin not loading (backend)
-- Ensure the file is in `api/plugins` and ends with `.js`, `.cjs`, or `.mjs`.
-- Check API logs for "Failed to load plugin".
-- Make sure the plugin exports `register` or is a function.
+<Callout type="info" title="Quick checks">
+  Confirm the API is running, the plugin file exists, and the plugin is registered where required.
+</Callout>
 
-## Plugin not rendering (frontend)
-- Confirm the plugin file lives in `app/plugins` and exports a default plugin object with a `name`.
-- Ensure the plugin is registered in `app/plugins/registry.ts`.
-- Make sure `PluginHost` wraps the app in `app/app/layout.tsx`.
-- If using `mounts`, verify the selector exists in the DOM.
-
-## Checkout guard not running
-- Use `api.createCheckoutSession` or `api.createCartCheckout`, which call guards.
-- If you call the API directly, call `runCheckoutGuards` first.
+<Accordions type="single" collapsible>
+  <Accordion title="Plugin not loading (backend)">
+    - Ensure the file is in `api/plugins` and ends with `.js`, `.cjs`, or `.mjs`.
+    - Check API logs for "Failed to load plugin".
+    - Make sure the plugin exports `register` or is a function.
+  </Accordion>
+  <Accordion title="Plugin not rendering (frontend)">
+    - Confirm the plugin file lives in `app/plugins` and exports a default plugin object with a `name`.
+    - Ensure the plugin is registered in `app/plugins/registry.ts`.
+    - Make sure `PluginHost` wraps the app in `app/app/layout.tsx`.
+    - If using `mounts`, verify the selector exists in the DOM.
+  </Accordion>
+  <Accordion title="Checkout guard not running">
+    - Use `api.createCheckoutSession` or `api.createCartCheckout`, which call guards.
+    - If you call the API directly, call `runCheckoutGuards` first.
+  </Accordion>
+</Accordions>

@@ -5,11 +5,27 @@ description: How frontend plugins are loaded and bootstrapped.
 
 The frontend plugin runtime lives in `app/lib/plugins` and runs in the browser. Plugin implementations live in `app/plugins` and are registered in `app/plugins/registry.ts`.
 
+<Files>
+  <Folder name="app" defaultOpen>
+    <Folder name="lib" defaultOpen>
+      <Folder name="plugins">
+        <File name="PluginHost.tsx" />
+      </Folder>
+    </Folder>
+    <Folder name="plugins" defaultOpen>
+      <File name="my-plugin.tsx" />
+      <File name="registry.ts" />
+    </Folder>
+  </Folder>
+</Files>
+
 ## Lifecycle
-- `PluginHost` in `app/lib/plugins/PluginHost.tsx` wraps the application.
-- `PluginProvider` creates the plugin context (API, storage, events, route).
-- Each plugin may run `bootstrap(ctx)` once and return a cleanup function.
-- The registry (`app/plugins/registry.ts`) exports the plugin list used by the runtime.
+<Steps>
+  <Step>`PluginHost` in `app/lib/plugins/PluginHost.tsx` wraps the application.</Step>
+  <Step>`PluginProvider` creates the plugin context (API, storage, events, route).</Step>
+  <Step>Each plugin may run `bootstrap(ctx)` once and return a cleanup function.</Step>
+  <Step>The registry (`app/plugins/registry.ts`) exports the plugin list used by the runtime.</Step>
+</Steps>
 
 ## Registration
 Add new frontend plugins to the registry so the runtime can pick them up.
@@ -23,7 +39,9 @@ export const plugins = [myPlugin];
 
 The list order is the execution order for slots and bootstrap hooks.
 
-Frontend plugins run in the browser. Add `use client` to plugin files that use hooks or browser APIs.
+<Callout type="note" title="Client-side plugins">
+  Frontend plugins run in the browser. Add `use client` to plugin files that use hooks or browser APIs.
+</Callout>
 
 ## Plugin shape
 ```tsx
@@ -52,5 +70,6 @@ const plugin: FrontendPlugin = {
 export default plugin;
 ```
 
-## Enabling and disabling
-`enabled` can be a boolean or a function. When `enabled` returns false, the plugin is skipped.
+<Callout type="info" title="Enabling and disabling">
+  `enabled` can be a boolean or a function. When `enabled` returns false, the plugin is skipped.
+</Callout>

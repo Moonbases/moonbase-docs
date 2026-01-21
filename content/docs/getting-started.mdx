@@ -3,61 +3,95 @@ title: Getting Started
 description: Create, enable, and remove plugins.
 ---
 
-## Backend plugin quick start
-1. Create a file in `api/plugins`, for example `api/plugins/hello.plugin.js`.
-2. Export a `register` function or a plugin object.
-3. Restart the API (`npm run dev` from repo root).
+## Quick start
 
-```js
-// api/plugins/hello.plugin.js
-module.exports = {
-  name: 'hello',
-  enabled: true,
-  version: '0.1.0',
-  register(ctx) {
-    ctx.routers.api.get('/plugins/hello', (_req, res) => {
-      res.json({ status_overview: 'success', status_message: 'HELLO' });
-    });
-  }
-};
-```
+<Tabs items={['Backend plugin', 'Frontend plugin']} defaultIndex={0}>
+  <Tab>
+    <Steps>
+      <Step>Create a file in `api/plugins`, for example `api/plugins/hello.plugin.js`.</Step>
+      <Step>Export a `register` function or a plugin object.</Step>
+      <Step>Restart the API (`npm run dev` from repo root).</Step>
+    </Steps>
 
-Supported formats: `.js`, `.cjs`, `.mjs`, or a folder with `index.js`.
+    ```js
+    // api/plugins/hello.plugin.js
+    module.exports = {
+      name: 'hello',
+      enabled: true,
+      version: '0.1.0',
+      register(ctx) {
+        ctx.routers.api.get('/plugins/hello', (_req, res) => {
+          res.json({ status_overview: 'success', status_message: 'HELLO' });
+        });
+      }
+    };
+    ```
 
-## Frontend plugin quick start
-1. Create `app/plugins/hello.tsx`.
-2. Export a `FrontendPlugin`.
-3. Register it in `app/plugins/registry.ts` (import it and add it to the `plugins` array).
-4. Ensure the app runs with `PluginHost` (already wired in `app/app/layout.tsx`).
+    <Callout type="note" title="Supported formats">
+      Use `.js`, `.cjs`, `.mjs`, or a folder with `index.js`.
+    </Callout>
+  </Tab>
+  <Tab>
+    <Steps>
+      <Step>Create `app/plugins/hello.tsx`.</Step>
+      <Step>Export a `FrontendPlugin`.</Step>
+      <Step>Register it in `app/plugins/registry.ts` (import it and add it to `plugins`).</Step>
+      <Step>Ensure the app runs with `PluginHost` (already wired in `app/app/layout.tsx`).</Step>
+    </Steps>
 
-```tsx
-// app/plugins/hello.tsx
-import type { FrontendPlugin } from '@/lib/plugins/types';
+    ```tsx
+    // app/plugins/hello.tsx
+    import type { FrontendPlugin } from '@/lib/plugins/types';
 
-const HelloPlugin: FrontendPlugin = {
-  name: 'hello',
-  enabled: true,
-  version: '0.1.0',
-  slots: {
-    global: () => <div className="fixed bottom-4 right-4">Hello</div>
-  }
-};
+    const HelloPlugin: FrontendPlugin = {
+      name: 'hello',
+      enabled: true,
+      version: '0.1.0',
+      slots: {
+        global: () => <div className="fixed bottom-4 right-4">Hello</div>
+      }
+    };
 
-export default HelloPlugin;
-```
+    export default HelloPlugin;
+    ```
 
-```ts
-// app/plugins/registry.ts
-import helloPlugin from './hello';
+    ```ts
+    // app/plugins/registry.ts
+    import helloPlugin from './hello';
 
-export const plugins = [helloPlugin];
-```
+    export const plugins = [helloPlugin];
+    ```
 
-The registry is a manual list of plugins. Add your plugin import to `app/plugins/registry.ts` and include it in the exported `plugins` array. Add `version` to label plugin releases.
+    <Callout type="info" title="Registry is explicit">
+      Add your plugin import to `app/plugins/registry.ts` and include it in the exported `plugins` array. Add `version` to label plugin releases.
+    </Callout>
+  </Tab>
+</Tabs>
 
-## Removing a plugin
-- Backend: delete the plugin file from `api/plugins`.
-- Frontend: delete the plugin file from `app/plugins` and remove it from `app/plugins/registry.ts`.
+## Project paths
 
-## Toggle without deleting
-Add `enabled: false` to backend or frontend plugins to skip loading without deleting the file. The API logs that the plugin is disabled and does not run it.
+<Files>
+  <Folder name="api" defaultOpen>
+    <Folder name="plugins">
+      <File name="hello.plugin.js" />
+    </Folder>
+  </Folder>
+  <Folder name="app" defaultOpen>
+    <Folder name="plugins">
+      <File name="hello.tsx" />
+      <File name="registry.ts" />
+    </Folder>
+  </Folder>
+</Files>
+
+## Maintenance
+
+<Accordions type="single" collapsible>
+  <Accordion title="Removing a plugin">
+    - Backend: delete the plugin file from `api/plugins`.
+    - Frontend: delete the plugin file from `app/plugins` and remove it from `app/plugins/registry.ts`.
+  </Accordion>
+  <Accordion title="Toggle without deleting">
+    Add `enabled: false` to backend or frontend plugins to skip loading without deleting the file. The API logs that the plugin is disabled and does not run it.
+  </Accordion>
+</Accordions>

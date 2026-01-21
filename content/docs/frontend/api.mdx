@@ -5,34 +5,41 @@ description: Use API, storage, and event helpers from plugins.
 
 Each plugin receives a `ctx` object through slots and bootstrap.
 
-## API
-`ctx.api` sends requests to `/api/proxy`, adds the current auth token as a `Token` header, and includes credentials.
+<Callout type="info" title="API helper">
+  `ctx.api` sends requests to `/api/proxy`, adds the current auth token as a `Token` header, and includes credentials.
+</Callout>
 
-## Storage
-Use localStorage, sessionStorage, and cookies safely.
+<Tabs items={['API', 'Storage', 'Events', 'Route', 'Checkout guards']} defaultIndex={0}>
+  <Tab>
+    Use `ctx.api` to call backend endpoints through the proxy.
+  </Tab>
+  <Tab>
+    Use localStorage, sessionStorage, and cookies safely.
 
-```ts
-ctx.storage.set('myKey', 'value');
-ctx.storage.setCookie('myCookie', 'value', { maxAge: 3600 });
-```
+    ```ts
+    ctx.storage.set('myKey', 'value');
+    ctx.storage.setCookie('myCookie', 'value', { maxAge: 3600 });
+    ```
+  </Tab>
+  <Tab>
+    Plugins can communicate using a simple event bus.
 
-## Events
-Plugins can communicate using a simple event bus.
-
-```ts
-const unsubscribe = ctx.events.on('route:change', (route) => {
-  ctx.logger.info('route changed', route);
-});
-```
-
-## Route info
-```ts
-const { pathname, search } = ctx.route.get();
-```
-
-## Checkout guards
-```ts
-ctx.checkout.registerGuard(async (context) => {
-  return true;
-});
-```
+    ```ts
+    const unsubscribe = ctx.events.on('route:change', (route) => {
+      ctx.logger.info('route changed', route);
+    });
+    ```
+  </Tab>
+  <Tab>
+    ```ts
+    const { pathname, search } = ctx.route.get();
+    ```
+  </Tab>
+  <Tab>
+    ```ts
+    ctx.checkout.registerGuard(async (context) => {
+      return true;
+    });
+    ```
+  </Tab>
+</Tabs>

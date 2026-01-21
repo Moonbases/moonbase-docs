@@ -5,10 +5,24 @@ description: Run logic when routes are ready or on shutdown.
 
 The backend loader exposes two hook points:
 
-- `hooks.onRoutesReady(callback)`
-- `hooks.onShutdown(callback)`
+<TypeTable
+  type={{
+    'hooks.onRoutesReady(callback)': {
+      type: '(callback) => void',
+      description: 'Runs after routes are registered.',
+      required: true
+    },
+    'hooks.onShutdown(callback)': {
+      type: '(callback) => void',
+      description: 'Runs when the API is shutting down.',
+      required: true
+    }
+  }}
+/>
 
-Use them for actions that must wait until routes are registered or for cleanup.
+<Callout type="info" title="When to use hooks">
+  Use them for actions that must wait until routes are registered or for cleanup before the API shuts down.
+</Callout>
 
 ```js
 module.exports = {
