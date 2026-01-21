@@ -18,9 +18,6 @@ export const docsTabs: SidebarTabWithProps[] = [
         <Rocket className="size-4" />
       </span>
     ),
-    props: {
-      className: 'docs-tab-option docs-tab-option--guide',
-    },
   },
   {
     title: 'Plugin Docs',
@@ -32,9 +29,6 @@ export const docsTabs: SidebarTabWithProps[] = [
         <Package className="size-4" />
       </span>
     ),
-    props: {
-      className: 'docs-tab-option docs-tab-option--plugin',
-    },
   },
   {
     title: 'API Docs',
@@ -46,9 +40,6 @@ export const docsTabs: SidebarTabWithProps[] = [
         <Server className="size-4" />
       </span>
     ),
-    props: {
-      className: 'docs-tab-option docs-tab-option--api',
-    },
   },
 ];
 
