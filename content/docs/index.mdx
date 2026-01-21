@@ -3,9 +3,11 @@ title: Moonbase Plugin System
 description: Extend the backend and frontend without touching core code.
 ---
 
+import { Eye, Link2 } from 'lucide-react';
+
 Moonbase ships with two plugin runtimes: a backend loader for the API and a frontend runtime for the Next.js app. Backend plugins are loaded from disk at runtime; frontend plugins are compiled into the app and registered explicitly.
 
-## At a glance
+## <Eye className="inline size-4 align-text-bottom" /> At a glance
 - Backend: drop a file in `api/plugins` and restart the API.
 - Frontend: add a plugin under `app/plugins` and register it in `app/plugins/registry.ts`.
 
@@ -20,7 +22,7 @@ Pick the runtime that matches the change you want: data and workflows in the bac
 - Inject UI into existing pages or global layout.
 - Validate checkout prerequisites before payment.
 
-## Quick links
+## <Link2 className="inline size-4 align-text-bottom" /> Quick links
 - [Getting started](./getting-started)
 - [Frontend runtime overview](./frontend/overview)
 - [Backend runtime overview](./backend/overview)

@@ -1,0 +1,192 @@
+---
+title: Moonbase Guide
+description: Install, configure, and launch Moonbase with payments ready to go.
+---
+
+import { AlertTriangle, CreditCard, Rocket, Settings } from 'lucide-react';
+
+This guide walks you through installing Moonbase from GitHub, getting your API keys, and wiring up payments.
+
+<Callout type="info" title="Self-hosted by design">
+  Your base URL is the host where you run Moonbase. API keys are printed once in the server console on first startup.
+</Callout>
+
+## <Rocket className="inline size-4 align-text-bottom" /> Installation via GitHub
+
+Weve moved Moonbase to GitHub to make updates seamless no more downloading new release packages every time.
+
+<Steps>
+  <Step>
+  ### 1. Access the Repository
+
+  - **Download from BuiltByBit (optional):**
+
+    If youve already installed via BuiltByBit and prefer to stick with that, you can continue updating manually.
+
+  - **Request GitHub Access:**
+
+    Once youve downloaded via BuiltByBit, open a #ticket. Ill grant you access to our GitHub repo so you can clone and pull future updates directly.
+  </Step>
+  <Step>
+  ### 2. Clone the Repo
+
+  - **Remove the BuiltByBit copy** (if you plan to switch).
+
+  - **Navigate** to your preferred folder in a terminal/PowerShell.
+
+  - **Run:**
+
+    ```bash
+    git clone https://github.com/aledlb8/moonbase.git
+    ```
+
+  - Youll now have a `moonbase` folder in your chosen directory.
+  </Step>
+  <Step>
+  ### 3. Pulling Updates
+
+  Whenever we publish a new release:
+
+  ```bash
+  cd moonbase
+  git pull
+  ```
+
+  <Callout type="note" title="Environment files stay local">
+    The `.env` files (your secret keys) are **not** tracked by Git. If we ever change the required variables, Ill let you know so you can update them manually.
+  </Callout>
+  </Step>
+</Steps>
+
+## <Settings className="inline size-4 align-text-bottom" /> Initial Setup
+
+Once youve cloned (or updated) the code, youll see this structure:
+
+<Files>
+  <Folder name="moonbase" defaultOpen>
+    <File name="install.bat" />
+    <File name="api.bat" />
+    <File name="app.bat" />
+    <Folder name="api" defaultOpen>
+      <File name=".env" />
+      <File name="index.js" />
+    </Folder>
+    <Folder name="app" defaultOpen>
+      <File name=".env" />
+      <File name="(front-end files)" />
+    </Folder>
+  </Folder>
+</Files>
+
+```
+moonbase/
+ install.bat
+ api.bat
+ app.bat
+ api/
+   .env
+   index.js
+ app/
+    .env
+     (front-end files)
+```
+
+### - Install Dependencies
+
+```bash
+.\install.bat
+```
+
+This installs everything for both the API and the APP.
+
+### - First Run
+
+```bash
+.\api.bat
+```
+
+* When you run this, youll receive a **Public API Key** and a **Private API Key**.
+* **Save them immediately** youll only see them once.
+* Open `app/.env` and paste each key into the corresponding variable.
+
+```
+PUBLIC_API_KEY=your_public_key_here
+PRIVATE_API_KEY=your_private_key_here
+```
+
+Then you can configure the rest of the `.env` values in the API and APP directory
+
+## Rebuild
+
+```
+cd app
+npm run build
+```
+
+### 4. Launch the App
+
+```bash
+.\app.bat
+```
+
+At this point, your API and front-end should be running ready for you to start selling!
+
+## <AlertTriangle className="inline size-4 align-text-bottom" /> Common Errors
+
+### Error:
+
+- You setup everything correctly but in the dashboard you are unable to login, that's an error with the batch file when calling the `npm` process
+
+### Fix:
+
+- You need to run each program manually without the use of the batch files
+
+- 1st `cd app`, `npm run build`, `npm run start`
+
+- 2nd `cd api`, `node index.js`
+
+## <CreditCard className="inline size-4 align-text-bottom" /> Setting up Stripe for payments
+
+You must register in stripe and get the secret key of your account
+
+For the webhook secret you must
+
+- Create a webhook and the destination URL should be the IP of the API `http://127.0.0.1:80/api/purchase/webhook`
+
+- And select the `checkout.session.completed` event
+
+## <CreditCard className="inline size-4 align-text-bottom" /> Setting up Coinbase for payments
+
+You must create a wallet https://beta.commerce.coinbase.com/payments
+
+And set a business name here https://beta.commerce.coinbase.com/settings/business
+
+Or else it will give errors when trying to buy with crypto
+
+Get your API key from: https://beta.commerce.coinbase.com/settings/security
+
+Get webhook secret from: https://beta.commerce.coinbase.com/settings/notifications
+
+Click on "Add an Endpoint" and set the URL to `http://localhost:80/api/purchase/webhook/coinbase`
+
+Make sure the following events are enabled
+
+- `chanrge:confirmed`
+
+- `charge:confirmed`
+
+- `charge:failed`
+
+## <CreditCard className="inline size-4 align-text-bottom" /> Setting up PayPal for payments
+
+Get your credentials from: https://developer.paypal.com/dashboard
+
+Create a REST API app and get your Client ID and Secret
+
+Get webhook ID from: https://developer.paypal.com/dashboard/webhooks
+
+Add webhook URL: `http://localhost:80/api/purchase/webhook/paypal`
+
+Subscribe to events: 
+
+- `PAYMENT.CAPTURE.COMPLETED`

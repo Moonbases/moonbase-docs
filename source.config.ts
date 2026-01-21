@@ -28,6 +28,19 @@ export const apiDocs = defineDocs({
   },
 });
 
+export const guideDocs = defineDocs({
+  dir: 'content/guide',
+  docs: {
+    schema: frontmatterSchema,
+    postprocess: {
+      includeProcessedMarkdown: true,
+    },
+  },
+  meta: {
+    schema: metaSchema,
+  },
+});
+
 export default defineConfig({
   mdxOptions: {
     // MDX options

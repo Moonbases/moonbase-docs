@@ -1,4 +1,4 @@
-import { apiSource, getApiPageImage, getPageImage, source } from '@/lib/source';
+import { apiSource, getApiPageImage, getGuidePageImage, getPageImage, guideSource, source } from '@/lib/source';
 import { notFound } from 'next/navigation';
 import { ImageResponse } from 'next/og';
 import { generate as DefaultImage } from 'fumadocs-ui/og';
@@ -12,6 +12,8 @@ export async function GET(_req: Request, { params }: RouteContext<'/og/docs/[...
   const page =
     pageSlugs[0] === 'api'
       ? apiSource.getPage(pageSlugs.slice(1))
+      : pageSlugs[0] === 'guide'
+        ? guideSource.getPage(pageSlugs.slice(1))
       : source.getPage(pageSlugs);
   if (!page) notFound();
 
@@ -35,5 +37,10 @@ export function generateStaticParams() {
     slug: getApiPageImage(page).segments,
   }));
 
-  return [...docsParams, ...apiParams];
+  const guideParams = guideSource.getPages().map((page) => ({
+    lang: page.locale,
+    slug: getGuidePageImage(page).segments,
+  }));
+
+  return [...docsParams, ...apiParams, ...guideParams];
 }

@@ -1,14 +1,15 @@
-import { apiSource, source } from '@/lib/source';
+import { apiSource, guideSource, source } from '@/lib/source';
 import { findPath } from 'fumadocs-core/page-tree';
 import { createSearchAPI } from 'fumadocs-core/search/server';
 import path from 'node:path';
 
 type DocsPage = ReturnType<typeof source.getPages>[number];
 type ApiPage = ReturnType<typeof apiSource.getPages>[number];
+type GuidePage = ReturnType<typeof guideSource.getPages>[number];
 
 async function buildIndexForSource(
-  activeSource: typeof source | typeof apiSource,
-  page: DocsPage | ApiPage,
+  activeSource: typeof source | typeof apiSource | typeof guideSource,
+  page: DocsPage | ApiPage | GuidePage,
 ) {
   let structuredData;
 
@@ -62,7 +63,10 @@ export const { GET } = createSearchAPI('advanced', {
     const apiIndexes = await Promise.all(
       apiSource.getPages().map((page) => buildIndexForSource(apiSource, page)),
     );
+    const guideIndexes = await Promise.all(
+      guideSource.getPages().map((page) => buildIndexForSource(guideSource, page)),
+    );
 
-    return [...docsIndexes, ...apiIndexes];
+    return [...docsIndexes, ...apiIndexes, ...guideIndexes];
   },
 });

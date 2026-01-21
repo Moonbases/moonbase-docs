@@ -1,4 +1,4 @@
-import { apiDocs, docs } from 'fumadocs-mdx:collections/server';
+import { apiDocs, docs, guideDocs } from 'fumadocs-mdx:collections/server';
 import { type InferPageType, loader } from 'fumadocs-core/source';
 import { lucideIconsPlugin } from 'fumadocs-core/source/lucide-icons';
 
@@ -15,9 +15,16 @@ export const apiSource = loader({
   plugins: [lucideIconsPlugin()],
 });
 
+export const guideSource = loader({
+  baseUrl: '/docs/guide',
+  source: guideDocs.toFumadocsSource(),
+  plugins: [lucideIconsPlugin()],
+});
+
 export type DocsPage = InferPageType<typeof source>;
 export type ApiDocsPage = InferPageType<typeof apiSource>;
-export type AnyDocsPage = DocsPage | ApiDocsPage;
+export type GuideDocsPage = InferPageType<typeof guideSource>;
+export type AnyDocsPage = DocsPage | ApiDocsPage | GuideDocsPage;
 
 export function getPageImage(page: InferPageType<typeof source>) {
   const segments = [...page.slugs, 'image.png'];
@@ -30,6 +37,15 @@ export function getPageImage(page: InferPageType<typeof source>) {
 
 export function getApiPageImage(page: InferPageType<typeof apiSource>) {
   const segments = ['api', ...page.slugs, 'image.png'];
+
+  return {
+    segments,
+    url: `/og/docs/${segments.join('/')}`,
+  };
+}
+
+export function getGuidePageImage(page: InferPageType<typeof guideSource>) {
+  const segments = ['guide', ...page.slugs, 'image.png'];
 
   return {
     segments,

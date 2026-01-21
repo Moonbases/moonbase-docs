@@ -3,13 +3,15 @@ title: Moonbase API
 description: Authenticate users, fetch profile data, and download files.
 ---
 
+import { Settings, Zap } from 'lucide-react';
+
 Moonbase API is the backend surface for Moonbase apps and plugins. Use it to authenticate users, retrieve profile data, and fetch user files.
 
 <Callout type="info" title="Authentication model">
   All requests include your public API key. After login, include the JWT in the Token header for user scoped endpoints.
 </Callout>
 
-## Quick start
+## <Zap className="inline size-4 align-text-bottom" /> Quick start
 
 <Steps>
   <Step>Copy your public API key from the console output on first startup.</Step>
@@ -17,7 +19,7 @@ Moonbase API is the backend surface for Moonbase apps and plugins. Use it to aut
   <Step>Use the JWT and API key for profile and file requests.</Step>
 </Steps>
 
-## Environment setup
+## <Settings className="inline size-4 align-text-bottom" /> Environment setup
 
 <Files>
   <Folder name="." defaultOpen>

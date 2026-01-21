@@ -1,13 +1,13 @@
-import { source } from '@/lib/source';
+import { guideSource } from '@/lib/source';
 import { DocsLayout } from 'fumadocs-ui/layouts/docs';
 import { baseOptions, docsTabs } from '@/lib/layout.shared';
 
-export default function Layout({ children }: LayoutProps<'/docs'>) {
+export default function Layout({ children }: LayoutProps<'/docs/guide'>) {
   return (
     <DocsLayout
-      tree={source.getPageTree()}
+      tree={guideSource.getPageTree()}
       sidebar={{ tabs: docsTabs }}
-      containerProps={{ className: 'docs-theme-plugin' }}
+      containerProps={{ className: 'docs-theme-guide' }}
       {...baseOptions()}
     >
       {children}
