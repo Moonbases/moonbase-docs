@@ -1,4 +1,4 @@
-import { apiSource, getLLMText, guideSource, source } from '@/lib/source';
+import { apiSource, getLLMText, guideSource, pluginSource } from '@/lib/source';
 import { notFound } from 'next/navigation';
 
 export const revalidate = false;
@@ -11,7 +11,9 @@ export async function GET(_req: Request, { params }: RouteContext<'/llms.mdx/doc
       ? apiSource.getPage(slugs.slice(1))
       : slugs[0] === 'guide'
         ? guideSource.getPage(slugs.slice(1))
-        : source.getPage(slugs);
+        : slugs[0] === 'plugin'
+          ? pluginSource.getPage(slugs.slice(1))
+          : null;
   if (!page) notFound();
 
   return new Response(await getLLMText(page), {
@@ -32,5 +34,10 @@ export function generateStaticParams() {
     slug: ['guide', ...(param.slug ?? [])],
   }));
 
-  return [...source.generateParams(), ...apiParams, ...guideParams];
+  const pluginParams = pluginSource.generateParams().map((param) => ({
+    ...param,
+    slug: ['plugin', ...(param.slug ?? [])],
+  }));
+
+  return [...pluginParams, ...apiParams, ...guideParams];
 }

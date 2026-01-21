@@ -1,9 +1,9 @@
-import { apiSource, getLLMText, guideSource, source } from '@/lib/source';
+import { apiSource, getLLMText, guideSource, pluginSource } from '@/lib/source';
 
 export const revalidate = false;
 
 export async function GET() {
-  const scan = [...source.getPages(), ...apiSource.getPages(), ...guideSource.getPages()].map(
+  const scan = [...pluginSource.getPages(), ...apiSource.getPages(), ...guideSource.getPages()].map(
     getLLMText,
   );
   const scanned = await Promise.all(scan);

@@ -1,9 +1,9 @@
-import { apiSource, guideSource, source, type AnyDocsPage } from '@/lib/source';
+import { apiSource, guideSource, pluginSource, type AnyDocsPage } from '@/lib/source';
 import { findPath } from 'fumadocs-core/page-tree';
 import { createSearchAPI } from 'fumadocs-core/search/server';
 import path from 'node:path';
 
-type DocsSource = typeof source | typeof apiSource | typeof guideSource;
+type DocsSource = typeof pluginSource | typeof apiSource | typeof guideSource;
 
 async function buildIndexForSource(
   activeSource: DocsSource,
@@ -49,8 +49,8 @@ export const { GET } = createSearchAPI('advanced', {
   // https://docs.orama.com/docs/orama-js/supported-languages
   language: 'english',
   indexes: async () => {
-    const docsIndexes = await Promise.all(
-      source.getPages().map((page) => buildIndexForSource(source, page)),
+    const pluginIndexes = await Promise.all(
+      pluginSource.getPages().map((page) => buildIndexForSource(pluginSource, page)),
     );
     const apiIndexes = await Promise.all(
       apiSource.getPages().map((page) => buildIndexForSource(apiSource, page)),
@@ -59,6 +59,6 @@ export const { GET } = createSearchAPI('advanced', {
       guideSource.getPages().map((page) => buildIndexForSource(guideSource, page)),
     );
 
-    return [...docsIndexes, ...apiIndexes, ...guideIndexes];
+    return [...pluginIndexes, ...apiIndexes, ...guideIndexes];
   },
 });

@@ -45,7 +45,7 @@ export default function HomePage() {
           </Link>
 
           <Link
-            href="/docs"
+            href="/docs/plugin"
             className="group p-6 border rounded-xl hover:shadow-lg transition-all bg-linear-to-br from-blue-50/50 to-transparent dark:from-blue-950/20 hover:border-blue-500/50"
           >
             <div className="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 mb-4">
