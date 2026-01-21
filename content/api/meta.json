@@ -1,0 +1,16 @@
+{
+  "title": "Moonbase API",
+  "description": "REST endpoints for auth, profile, and file access.",
+  "root": true,
+  "pages": [
+    "index",
+    "authentication",
+    "user-info",
+    "files",
+    "---Reference---",
+    "reference",
+    "errors",
+    "---Examples---",
+    "...examples"
+  ]
+}

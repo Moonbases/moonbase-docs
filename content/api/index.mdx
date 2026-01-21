@@ -1,0 +1,44 @@
+---
+title: Moonbase API
+description: Authenticate users, fetch profile data, and download files.
+---
+
+Moonbase API is the backend surface for Moonbase apps and plugins. Use it to authenticate users, retrieve profile data, and fetch user files.
+
+<Callout type="info" title="Authentication model">
+  All requests include your public API key. After login, include the JWT in the Token header for user scoped endpoints.
+</Callout>
+
+## Quick start
+
+<Steps>
+  <Step>Copy your public API key from the console output on first startup.</Step>
+  <Step>Authenticate with `POST /api/auth/user` to receive a JWT.</Step>
+  <Step>Use the JWT and API key for profile and file requests.</Step>
+</Steps>
+
+## Environment setup
+
+<Files>
+  <Folder name="." defaultOpen>
+    <File name=".env.local" />
+  </Folder>
+</Files>
+
+```bash
+# Replace with your Moonbase API host.
+NEXT_PUBLIC_API_URL=https://your-moonbase-host
+# Printed once in the server console on first startup.
+NEXT_PUBLIC_API_KEY=pk_live_xxx
+```
+
+## Jump in
+
+<Cards>
+  <Card title="Authentication" href="./authentication" description="Log in, get a JWT, and learn required headers." />
+  <Card title="User profile" href="./user-info" description="Fetch account data with your API key + JWT." />
+  <Card title="User files" href="./files" description="Download user files and handle binary responses." />
+  <Card title="Examples" href="./examples" description="Ready-to-run requests in multiple languages." />
+  <Card title="API reference" href="./reference" description="Endpoints with request and response examples." />
+  <Card title="Errors and status codes" href="./errors" description="Understand common error shapes and limits." />
+</Cards>

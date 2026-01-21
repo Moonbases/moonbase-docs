@@ -1,0 +1,97 @@
+---
+title: User files
+description: Download a user file by name.
+---
+
+<Callout type="warning" title="Binary response">
+  This endpoint returns binary data. Handle the response as a stream or blob.
+</Callout>
+
+## Request flow
+
+<Steps>
+  <Step>Copy your public API key from the console output on first startup.</Step>
+  <Step>Authenticate with `POST /api/auth/user` to get a JWT.</Step>
+  <Step>Call `GET /api/user/files/:file` with headers and save the file.</Step>
+</Steps>
+
+## Parameters and headers
+
+<TypeTable
+  type={{
+    file: { type: 'string', description: 'The filename to download.', required: true },
+    Authorization: { type: 'string', description: 'Public API key.', required: true },
+    Token: { type: 'string', description: 'JWT from the auth endpoint.', required: true },
+  }}
+/>
+
+<Tabs items={['Request', 'Response']} defaultIndex={0}>
+  <Tab>
+    ```http
+    GET /api/user/files/:file
+    Authorization: <PUBLIC_API_KEY>
+    Token: <jwt_token>
+    ```
+  </Tab>
+  <Tab>
+    ```text
+    Content-Disposition: attachment; filename="original_filename.ext"
+    Content-Type: application/octet-stream
+    Content-Length: <file_size>
+    ```
+  </Tab>
+</Tabs>
+
+## Example request
+
+<CodeBlockTabs defaultValue="curl">
+  <CodeBlockTabsList>
+    <CodeBlockTabsTrigger value="curl">cURL</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="javascript">JavaScript</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="python">Python</CodeBlockTabsTrigger>
+  </CodeBlockTabsList>
+  <CodeBlockTab value="curl">
+    ```bash
+    curl -L "https://your-moonbase-host/api/user/files/your_file_name" \
+      -H "Authorization: <PUBLIC_API_KEY>" \
+      -H "Token: <jwt_token>" \
+      -o downloaded_file.ext
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="javascript">
+    ```javascript
+    const res = await fetch(
+      "https://your-moonbase-host/api/user/files/your_file_name",
+      {
+        method: "GET",
+        headers: {
+          Authorization: "<PUBLIC_API_KEY>",
+          Token: "<jwt_token>"
+        }
+      }
+    );
+
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="python">
+    ```python
+    import requests
+
+    with requests.get(
+        "https://your-moonbase-host/api/user/files/your_file_name",
+        headers={
+            "Authorization": "<PUBLIC_API_KEY>",
+            "Token": "<jwt_token>"
+        },
+        stream=True,
+        timeout=30,
+    ) as res:
+        res.raise_for_status()
+        with open("downloaded_file.ext", "wb") as handle:
+            for chunk in res.iter_content(chunk_size=8192):
+                handle.write(chunk)
+    ```
+  </CodeBlockTab>
+</CodeBlockTabs>

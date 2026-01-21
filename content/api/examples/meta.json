@@ -1,0 +1,9 @@
+{
+  "title": "Examples",
+  "pages": [
+    "index",
+    "authentication",
+    "user-info",
+    "files"
+  ]
+}

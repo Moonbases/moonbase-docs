@@ -1,0 +1,51 @@
+---
+title: Errors and status codes
+description: Error response shape and common failure cases.
+---
+
+Most errors follow the same envelope so clients can handle them consistently.
+
+<TypeTable
+  type={{
+    status_message: { type: 'string', description: 'Machine readable status identifier.', required: true },
+    status_overview: { type: 'string', description: 'success or failed.', required: true },
+    status_code: { type: 'number', description: 'HTTP status code.', required: true },
+    status_data: { type: 'object', description: 'Optional error payload.', required: false },
+  }}
+/>
+
+<CodeBlockTabs defaultValue="example">
+  <CodeBlockTabsList>
+    <CodeBlockTabsTrigger value="example">Example</CodeBlockTabsTrigger>
+  </CodeBlockTabsList>
+  <CodeBlockTab value="example">
+    ```json
+    {
+      "status_message": "ACCESS_DENIED",
+      "status_overview": "failed",
+      "status_code": 403,
+      "status_data": {
+        "reason": "Token does not have access to this resource."
+      }
+    }
+    ```
+  </CodeBlockTab>
+</CodeBlockTabs>
+
+<Tabs items={['Auth errors', 'Permission errors', 'Rate limits']} defaultIndex={0}>
+  <Tab>
+    - 401 UNAUTHORIZED: Credentials missing or invalid.
+    - 403 FORBIDDEN: Token exists but is not allowed.
+  </Tab>
+  <Tab>
+    - 403 ACCESS_DENIED: The user does not own the resource.
+    - 404 NOT_FOUND: The resource does not exist or is hidden.
+  </Tab>
+  <Tab>
+    - 429 RATE_LIMITED: Too many requests in a short window.
+  </Tab>
+</Tabs>
+
+<Callout type="warning" title="Rate limiting">
+  When you receive a 429, back off and retry with exponential delay. Avoid running parallel retries.
+</Callout>

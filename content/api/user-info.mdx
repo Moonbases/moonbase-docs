@@ -1,0 +1,94 @@
+---
+title: User profile
+description: Fetch profile data for the authenticated user.
+---
+
+<Callout type="info" title="Requires JWT">
+  This endpoint requires your public API key and the user's JWT.
+</Callout>
+
+## Request flow
+
+<Steps>
+  <Step>Copy your public API key from the console output on first startup.</Step>
+  <Step>Authenticate with `POST /api/auth/user` to get a JWT.</Step>
+  <Step>Call `GET /api/user/info` with `Authorization` and `Token` headers.</Step>
+</Steps>
+
+## Headers
+
+<TypeTable
+  type={{
+    Authorization: { type: 'string', description: 'Public API key.', required: true },
+    Token: { type: 'string', description: 'JWT from the auth endpoint.', required: true },
+    'Content-Type': { type: 'string', description: 'application/json', required: false },
+  }}
+/>
+
+<Tabs items={['Request', 'Response']} defaultIndex={0}>
+  <Tab>
+    ```http
+    GET /api/user/info
+    Authorization: <PUBLIC_API_KEY>
+    Token: <jwt_token>
+    ```
+  </Tab>
+  <Tab>
+    ```json
+    {
+      "status_message": "USER_INFO_RETRIEVED",
+      "status_overview": "success",
+      "status_code": 200,
+      "status_data": {
+        "user": { "id": "user_123", "name": "your_username" }
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Example request
+
+<CodeBlockTabs defaultValue="curl">
+  <CodeBlockTabsList>
+    <CodeBlockTabsTrigger value="curl">cURL</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="javascript">JavaScript</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="python">Python</CodeBlockTabsTrigger>
+  </CodeBlockTabsList>
+  <CodeBlockTab value="curl">
+    ```bash
+    curl -X GET "https://your-moonbase-host/api/user/info" \
+      -H "Authorization: <PUBLIC_API_KEY>" \
+      -H "Token: <jwt_token>"
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="javascript">
+    ```javascript
+    const res = await fetch("https://your-moonbase-host/api/user/info", {
+      method: "GET",
+      headers: {
+        Authorization: "<PUBLIC_API_KEY>",
+        Token: "<jwt_token>"
+      }
+    });
+
+    const data = await res.json();
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="python">
+    ```python
+    import requests
+
+    res = requests.get(
+        "https://your-moonbase-host/api/user/info",
+        headers={
+            "Authorization": "<PUBLIC_API_KEY>",
+            "Token": "<jwt_token>"
+        },
+        timeout=10,
+    )
+
+    print(res.json())
+    ```
+  </CodeBlockTab>
+</CodeBlockTabs>

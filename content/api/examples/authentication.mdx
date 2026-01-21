@@ -1,0 +1,637 @@
+---
+title: Authentication examples
+description: Copy-paste auth requests in multiple languages.
+---
+
+<Callout type="info" title="Self-hosted base URL">
+  Use the API base URL
+</Callout>
+
+Use these examples to request a JWT for user-scoped endpoints.
+
+<CodeBlockTabs defaultValue="javascript">
+  <CodeBlockTabsList>
+    <CodeBlockTabsTrigger value="javascript">JavaScript</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="typescript">TypeScript</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="python">Python</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="java">Java</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="csharp">C#</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="cpp">C++</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="ruby">Ruby</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="go">Go</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="rust">Rust</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="php">PHP</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="swift">Swift</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="lua">Lua</CodeBlockTabsTrigger>
+  </CodeBlockTabsList>
+  <CodeBlockTab value="javascript">
+    ```javascript
+fetch('https://your-moonbase-host/api/auth/user', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+  },
+  body: JSON.stringify({
+    username: 'YOUR_USERNAME',
+    password: 'YOUR_PASSWORD',
+    hwid: 'OPTIONAL_HWID'
+  })
+})
+.then(response => response.json())
+.then(data => console.log(data))
+.catch(error => console.error('Error:', error));
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="typescript">
+    ```typescript
+interface AuthRequest {
+  username: string;
+  password: string;
+  hwid?: string;
+}
+
+interface AuthResponse {
+  success: boolean;
+  token?: string;
+  message?: string;
+}
+
+const authenticateUser = async (credentials: AuthRequest): Promise<AuthResponse> => {
+  try {
+    const response = await fetch('https://your-moonbase-host/api/auth/user', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(credentials)
+    });
+
+    return await response.json() as AuthResponse;
+  } catch (error) {
+    throw new Error(`Authentication failed: ${error}`);
+  }
+};
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="python">
+    ```python
+import requests
+import json
+from typing import Optional, Dict, Any
+
+def authenticate_user(username: str, password: str, hwid: Optional[str] = None) -> Dict[Any, Any]:
+    """Authenticate user with the API"""
+    url = 'https://your-moonbase-host/api/auth/user'
+
+    payload = {
+        'username': username,
+        'password': password,
+        'hwid': hwid
+    }
+
+    try:
+        response = requests.post(
+            url,
+            json=payload,
+            headers={'Content-Type': 'application/json'},
+            timeout=10
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        print(f"Authentication error: {e}")
+        raise
+
+# Usage
+result = authenticate_user('YOUR_USERNAME', 'YOUR_PASSWORD', 'OPTIONAL_HWID')
+print(json.dumps(result, indent=2))
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="java">
+    ```java
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.net.URI;
+import java.time.Duration;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Map;
+
+public class AuthClient {
+    private static final HttpClient client = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofSeconds(10))
+        .build();
+
+    public static String authenticateUser(String username, String password, String hwid) {
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            Map<String, String> payload = Map.of(
+                "username", username,
+                "password", password,
+                "hwid", hwid != null ? hwid : ""
+            );
+
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://your-moonbase-host/api/auth/user"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(payload)))
+                .timeout(Duration.ofSeconds(30))
+                .build();
+
+            HttpResponse<String> response = client.send(request,
+                HttpResponse.BodyHandlers.ofString());
+
+            return response.body();
+        } catch (Exception e) {
+            throw new RuntimeException("Authentication failed", e);
+        }
+    }
+}
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="csharp">
+    ```csharp
+using System;
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+
+public class AuthClient
+{
+    private static readonly HttpClient httpClient = new HttpClient();
+
+    public class AuthRequest
+    {
+        public string Username { get; set; }
+        public string Password { get; set; }
+        public string Hwid { get; set; }
+    }
+
+    public static async Task<string> AuthenticateUserAsync(string username, string password, string hwid = null)
+    {
+        var request = new AuthRequest
+        {
+            Username = username,
+            Password = password,
+            Hwid = hwid
+        };
+
+        var json = JsonSerializer.Serialize(request);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        try
+        {
+            var response = await httpClient.PostAsync(
+                "https://your-moonbase-host/api/auth/user",
+                content);
+
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsStringAsync();
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new Exception($"Authentication failed: {ex.Message}");
+        }
+    }
+}
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="cpp">
+    ```cpp
+#include <curl/curl.h>
+        #include <nlohmann/json.hpp>
+        #include <iostream>
+        #include <string>
+        #include <stdexcept>
+
+        using json = nlohmann::json;
+
+        struct WriteCallbackData {
+            std::string data;
+        };
+
+        static size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
+            size_t totalSize = size * nmemb;
+            static_cast<WriteCallbackData*>(userp)->data.append(
+                static_cast<char*>(contents), totalSize
+            );
+            return totalSize;
+        }
+
+        std::string authenticateUser(
+            const std::string& username,
+            const std::string& password,
+            const std::string& hwid = ""
+        ) {
+            CURL* curl = curl_easy_init();
+            if (!curl) {
+                throw std::runtime_error("Failed to initialize CURL");
+            }
+
+            json payload = {
+                {"username", username},
+                {"password", password},
+                {"hwid",      hwid}
+            };
+            std::string jsonString = payload.dump();
+
+            WriteCallbackData response;
+            struct curl_slist* headers = nullptr;
+            headers = curl_slist_append(headers, "Content-Type: application/json");
+
+            curl_easy_setopt(curl, CURLOPT_URL, "https://your-moonbase-host/api/auth/user");
+            curl_easy_setopt(curl, CURLOPT_POST, 1L);
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, jsonString.c_str());
+            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+
+            CURLcode res = curl_easy_perform(curl);
+
+            curl_slist_free_all(headers);
+            curl_easy_cleanup(curl);
+
+            if (res != CURLE_OK) {
+                throw std::runtime_error(
+                    std::string("CURL request failed: ") + curl_easy_strerror(res)
+                );
+            }
+
+            return response.data;
+        }
+
+        int main() {
+            try {
+                std::string result = authenticateUser("alice", "s3cr3tP@ss", "HWID-12345");
+                auto jsonRes = json::parse(result);
+                std::cout << "Server replied: " << jsonRes.dump(2) << std::endl;
+            }
+            catch (const std::exception& ex) {
+                std::cerr << "Error: " << ex.what() << std::endl;
+                return 1;
+            }
+            return 0;
+        }
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="ruby">
+    ```ruby
+require 'net/http'
+require 'json'
+require 'uri'
+
+class AuthClient
+  API_URL = 'https://your-moonbase-host/api/auth/user'
+
+  def self.authenticate_user(username, password, hwid: nil)
+    uri = URI(API_URL)
+
+    payload = {
+      username: username,
+      password: password,
+      hwid: hwid
+    }.compact
+
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = uri.scheme == 'https'
+    http.read_timeout = 30
+
+    request = Net::HTTP::Post.new(uri)
+    request['Content-Type'] = 'application/json'
+    request['Accept'] = 'application/json'
+    request.body = payload.to_json
+
+    begin
+      response = http.request(request)
+
+      case response
+      when Net::HTTPSuccess
+        JSON.parse(response.body)
+      else
+        raise "Authentication failed: #{response.code} #{response.message}"
+      end
+    rescue JSON::ParserError => e
+      raise "Invalid JSON response: #{e.message}"
+    rescue StandardError => e
+      raise "Request failed: #{e.message}"
+    end
+  end
+end
+
+# Usage
+result = AuthClient.authenticate_user('YOUR_USERNAME', 'YOUR_PASSWORD', hwid: 'OPTIONAL_HWID')
+puts JSON.pretty_generate(result)
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="go">
+    ```go
+package main
+
+import (
+    "bytes"
+    "context"
+    "encoding/json"
+    "fmt"
+    "net/http"
+    "time"
+)
+
+type AuthRequest struct {
+    Username string `json:"username"`
+    Password string `json:"password"`
+    HWID     string `json:"hwid,omitempty"`
+}
+
+type AuthResponse struct {
+    Success bool   `json:"success"`
+    Token   string `json:"token,omitempty"`
+    Message string `json:"message,omitempty"`
+}
+
+func authenticateUser(ctx context.Context, username, password, hwid string) (*AuthResponse, error) {
+    client := &http.Client{
+        Timeout: 30 * time.Second,
+    }
+
+    payload := AuthRequest{
+        Username: username,
+        Password: password,
+        HWID:     hwid,
+    }
+
+    jsonData, err := json.Marshal(payload)
+    if err != nil {
+        return nil, fmt.Errorf("failed to marshal request: %w", err)
+    }
+
+    req, err := http.NewRequestWithContext(ctx, "POST",
+        "https://your-moonbase-host/api/auth/user",
+        bytes.NewBuffer(jsonData))
+    if err != nil {
+        return nil, fmt.Errorf("failed to create request: %w", err)
+    }
+
+    req.Header.Set("Content-Type", "application/json")
+    req.Header.Set("Accept", "application/json")
+
+    resp, err := client.Do(req)
+    if err != nil {
+        return nil, fmt.Errorf("request failed: %w", err)
+    }
+    defer resp.Body.Close()
+
+    var authResp AuthResponse
+    if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
+        return nil, fmt.Errorf("failed to decode response: %w", err)
+    }
+
+    return &authResp, nil
+}
+
+func main() {
+    ctx := context.Background()
+    result, err := authenticateUser(ctx, "YOUR_USERNAME", "YOUR_PASSWORD", "OPTIONAL_HWID")
+    if err != nil {
+        panic(err)
+    }
+
+    fmt.Printf("Authentication result: %+v\n", result)
+}
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="rust">
+    ```rust
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use tokio;
+
+#[derive(Serialize)]
+struct AuthRequest {
+    username: String,
+    password: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    hwid: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+struct AuthResponse {
+    success: bool,
+    token: Option<String>,
+    message: Option<String>,
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()?;
+
+    let auth_request = AuthRequest {
+        username: "YOUR_USERNAME".to_string(),
+        password: "YOUR_PASSWORD".to_string(),
+        hwid: Some("OPTIONAL_HWID".to_string()),
+    };
+
+    let response = client
+        .post("https://your-moonbase-host/api/auth/user")
+        .json(&auth_request)
+        .header("Accept", "application/json")
+        .send()
+        .await?;
+
+    match response.status() {
+        reqwest::StatusCode::OK => {
+            let auth_response: AuthResponse = response.json().await?;
+            println!("Authentication successful: {:#?}", auth_response);
+        }
+        status => {
+            let error_text = response.text().await?;
+            eprintln!("Authentication failed with status {}: {}", status, error_text);
+        }
+    }
+
+    Ok(())
+}
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="php">
+    ```php
+<?php
+
+class AuthClient {
+    private const API_URL = 'https://your-moonbase-host/api/auth/user';
+    private const TIMEOUT = 30;
+
+    public static function authenticateUser(string $username, string $password, ?string $hwid = null): array {
+        $payload = [
+            'username' => $username,
+            'password' => $password
+        ];
+
+        if ($hwid !== null) {
+            $payload['hwid'] = $hwid;
+        }
+
+        $context = stream_context_create([
+            'http' => [
+                'method' => 'POST',
+                'header' => [
+                    'Content-Type: application/json',
+                    'Accept: application/json'
+                ],
+                'content' => json_encode($payload),
+                'timeout' => self::TIMEOUT,
+                'ignore_errors' => true
+            ]
+        ]);
+
+        $response = file_get_contents(self::API_URL, false, $context);
+
+        if ($response === false) {
+            throw new Exception('Failed to make HTTP request');
+        }
+
+        $httpCode = null;
+        if (isset($http_response_header)) {
+            preg_match('/HTTP\/\d+\.\d+ (\d+)/', $http_response_header[0], $matches);
+            $httpCode = (int)$matches[1];
+        }
+
+        if ($httpCode >= 400) {
+            throw new Exception("HTTP Error $httpCode: $response");
+        }
+
+        $decodedResponse = json_decode($response, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new Exception('Invalid JSON response: ' . json_last_error_msg());
+        }
+
+        return $decodedResponse;
+    }
+}
+
+// Usage
+try {
+    $result = AuthClient::authenticateUser('YOUR_USERNAME', 'YOUR_PASSWORD', 'OPTIONAL_HWID');
+    echo json_encode($result, JSON_PRETTY_PRINT);
+} catch (Exception $e) {
+    echo "Error: " . $e->getMessage() . PHP_EOL;
+}
+
+?>
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="swift">
+    ```swift
+import Foundation
+
+struct AuthRequest: Codable {
+    let username: String
+    let password: String
+    let hwid: String?
+}
+
+struct AuthResponse: Codable {
+    let success: Bool
+    let token: String?
+    let message: String?
+}
+
+class AuthClient {
+    static let shared = AuthClient()
+    private let session = URLSession.shared
+
+    func authenticateUser(username: String, password: String, hwid: String? = nil) async throws -> AuthResponse {
+        guard let url = URL(string: "https://your-moonbase-host/api/auth/user") else {
+            throw URLError(.badURL)
+        }
+
+        let authRequest = AuthRequest(username: username, password: password, hwid: hwid)
+        let jsonData = try JSONEncoder().encode(authRequest)
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpBody = jsonData
+        request.timeoutInterval = 30
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw URLError(.badServerResponse)
+        }
+
+        guard 200...299 ~= httpResponse.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+
+        return try JSONDecoder().decode(AuthResponse.self, from: data)
+    }
+}
+
+// Usage
+Task {
+    do {
+        let result = try await AuthClient.shared.authenticateUser(
+            username: "YOUR_USERNAME",
+            password: "YOUR_PASSWORD",
+            hwid: "OPTIONAL_HWID"
+        )
+        print("Authentication result: \(result)")
+    } catch {
+        print("Authentication failed: \(error)")
+    }
+}
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="lua">
+    ```lua
+local http   = require("socket.http")
+local ltn12  = require("ltn12")
+local json   = require("dkjson")
+
+local function authenticate_user(username, password, hwid)
+  local api_url = os.getenv("NEXT_PUBLIC_API_URL") .. "/api/auth/user"
+  local payload = json.encode({
+    username = username,
+    password = password,
+    hwid     = hwid
+  })
+
+  local response = {}
+  local ok, code, headers, status = http.request{
+    url     = api_url,
+    method  = "POST",
+    headers = {
+      ["Content-Type"]   = "application/json",
+      ["Accept"]         = "application/json",
+      ["Content-Length"] = tostring(#payload),
+    },
+    source = ltn12.source.string(payload),
+    sink   = ltn12.sink.table(response),
+  }
+
+  if not ok or code ~= 200 then
+    error("Authentication failed: HTTP " .. tostring(code))
+  end
+
+  local body, err = json.decode(table.concat(response), 1, nil)
+  if err then
+    error("JSON decode error: " .. err)
+  end
+
+  return body
+end
+
+-- Usage
+local result = authenticate_user("YOUR_USERNAME", "YOUR_PASSWORD", "OPTIONAL_HWID")
+print(json.encode(result, { indent = true }))
+    ```
+  </CodeBlockTab>
+</CodeBlockTabs>

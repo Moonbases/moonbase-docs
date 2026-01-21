@@ -1,0 +1,525 @@
+---
+title: User files examples
+description: Download a user file in multiple languages.
+---
+
+<Callout type="info" title="Self-hosted base URL">
+  Use the API base URL
+</Callout>
+
+This endpoint returns binary data, so save the response to disk or a blob.
+
+<CodeBlockTabs defaultValue="javascript">
+  <CodeBlockTabsList>
+    <CodeBlockTabsTrigger value="javascript">JavaScript</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="typescript">TypeScript</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="python">Python</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="java">Java</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="csharp">C#</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="cpp">C++</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="ruby">Ruby</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="go">Go</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="rust">Rust</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="php">PHP</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="swift">Swift</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="lua">Lua</CodeBlockTabsTrigger>
+  </CodeBlockTabsList>
+  <CodeBlockTab value="javascript">
+    ```javascript
+fetch('https://your-moonbase-host/api/user/files/your_file_name', {
+  method: 'GET',
+  headers: {
+    'Authorization': '<PUBLIC_API_KEY>',
+    'Token': '<jwt_token>'
+  }
+})
+.then(response => {
+  if (!response.ok) throw new Error('Download failed');
+  return response.blob();
+})
+.then(blob => {
+  // Create download link
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'filename.ext';
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+})
+.catch(error => console.error('Error:', error));
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="typescript">
+    ```typescript
+const downloadFile = async (
+  fileName: string,
+  token: string,
+  apiKey: string
+): Promise<void> => {
+  try {
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/api/user/files/${fileName}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': apiKey,
+          'Token': token
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Download failed: ${response.statusText}`);
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  } catch (error) {
+    throw new Error(`File download failed: ${error}`);
+  }
+};
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="python">
+    ```python
+import requests
+
+def download_file(file_name: str, token: str, api_key: str, save_path: str):
+    """Download a file from the API"""
+    url = f'https://your-moonbase-host/api/user/files/{file_name}'
+    headers = {
+        'Authorization': api_key,
+        'Token': token
+    }
+
+    response = requests.get(url, headers=headers, stream=True, timeout=30)
+    response.raise_for_status()
+
+    with open(save_path, 'wb') as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            f.write(chunk)
+
+    print(f"File downloaded successfully to {save_path}")
+
+
+# Usage
+download_file('your_file_name', '<jwt_token>', '<PUBLIC_API_KEY>', './downloaded_file.ext')
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="java">
+    ```java
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+
+public class FileDownloadClient {
+    private static final HttpClient client = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofSeconds(10))
+        .build();
+
+    public static void downloadFile(String fileName, String token, String apiKey, Path savePath) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://your-moonbase-host/api/user/files/" + fileName))
+            .header("Authorization", apiKey)
+            .header("Token", token)
+            .GET()
+            .timeout(Duration.ofMinutes(5))
+            .build();
+
+        HttpResponse<byte[]> response = client.send(
+            request,
+            HttpResponse.BodyHandlers.ofByteArray()
+        );
+
+        if (response.statusCode() == 200) {
+            Files.write(savePath, response.body());
+            System.out.println("File downloaded successfully");
+        } else {
+            throw new RuntimeException("Download failed: " + response.statusCode());
+        }
+    }
+}
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="csharp">
+    ```csharp
+using System;
+using System.IO;
+using System.Net.Http;
+using System.Threading.Tasks;
+
+public class FileDownloadClient
+{
+    private static readonly HttpClient httpClient = new HttpClient();
+
+    public static async Task DownloadFileAsync(
+        string fileName,
+        string token,
+        string apiKey,
+        string savePath
+    )
+    {
+        var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"https://your-moonbase-host/api/user/files/{fileName}"
+        );
+        request.Headers.Add("Authorization", apiKey);
+        request.Headers.Add("Token", token);
+
+        var response = await httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        using (var fs = new FileStream(savePath, FileMode.Create, FileAccess.Write))
+        {
+            await response.Content.CopyToAsync(fs);
+        }
+
+        Console.WriteLine($"File downloaded to {savePath}");
+    }
+}
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="cpp">
+    ```cpp
+#include <curl/curl.h>
+#include <fstream>
+#include <string>
+#include <stdexcept>
+
+static size_t WriteToFile(void* ptr, size_t size, size_t nmemb, std::ofstream* stream) {
+    stream->write(static_cast<char*>(ptr), size * nmemb);
+    return size * nmemb;
+}
+
+void downloadFile(
+    const std::string& fileName,
+    const std::string& token,
+    const std::string& apiKey,
+    const std::string& savePath
+) {
+    CURL* curl = curl_easy_init();
+    if (!curl) throw std::runtime_error("Failed to initialize CURL");
+
+    std::ofstream outFile(savePath, std::ios::binary);
+    if (!outFile.is_open()) {
+        curl_easy_cleanup(curl);
+        throw std::runtime_error("Failed to open output file");
+    }
+
+    std::string url = "https://your-moonbase-host/api/user/files/" + fileName;
+    struct curl_slist* headers = nullptr;
+    headers = curl_slist_append(headers, ("Authorization: " + apiKey).c_str());
+    headers = curl_slist_append(headers, ("Token: " + token).c_str());
+
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteToFile);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &outFile);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+
+    CURLcode res = curl_easy_perform(curl);
+
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(curl);
+    outFile.close();
+
+    if (res != CURLE_OK) {
+        throw std::runtime_error("Download failed: " + std::string(curl_easy_strerror(res)));
+    }
+}
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="ruby">
+    ```ruby
+require 'net/http'
+require 'uri'
+
+class FileDownloadClient
+  API_BASE = 'https://your-moonbase-host/api/user/files'
+
+  def self.download_file(file_name, token, api_key, save_path)
+    uri = URI("#{API_BASE}/#{file_name}")
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = uri.scheme == 'https'
+    http.read_timeout = 300
+
+    request = Net::HTTP::Get.new(uri)
+    request['Authorization'] = api_key
+    request['Token'] = token
+
+    response = http.request(request)
+
+    case response
+    when Net::HTTPSuccess
+      File.open(save_path, 'wb') do |file|
+        file.write(response.body)
+      end
+      puts "File downloaded to #{save_path}"
+    else
+      raise "Download failed: #{response.code} #{response.message}"
+    end
+  end
+end
+
+# Usage
+FileDownloadClient.download_file(
+  'your_file_name',
+  '<jwt_token>',
+  '<PUBLIC_API_KEY>',
+  './downloaded_file.ext'
+)
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="go">
+    ```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "io"
+    "net/http"
+    "os"
+    "time"
+)
+
+func downloadFile(ctx context.Context, fileName, token, apiKey, savePath string) error {
+    client := &http.Client{Timeout: 5 * time.Minute}
+
+    url := fmt.Sprintf("https://your-moonbase-host/api/user/files/%s", fileName)
+    req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+    if err != nil {
+        return fmt.Errorf("failed to create request: %w", err)
+    }
+
+    req.Header.Set("Authorization", apiKey)
+    req.Header.Set("Token", token)
+
+    resp, err := client.Do(req)
+    if err != nil {
+        return fmt.Errorf("request failed: %w", err)
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode != http.StatusOK {
+        return fmt.Errorf("download failed with status: %d", resp.StatusCode)
+    }
+
+    outFile, err := os.Create(savePath)
+    if err != nil {
+        return fmt.Errorf("failed to create file: %w", err)
+    }
+    defer outFile.Close()
+
+    _, err = io.Copy(outFile, resp.Body)
+    if err != nil {
+        return fmt.Errorf("failed to write file: %w", err)
+    }
+
+    fmt.Printf("File downloaded to %s\n", savePath)
+    return nil
+}
+
+func main() {
+    ctx := context.Background()
+    err := downloadFile(ctx, "your_file_name", "<jwt_token>", "<PUBLIC_API_KEY>", "./downloaded_file.ext")
+    if err != nil {
+        panic(err)
+    }
+}
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="rust">
+    ```rust
+use reqwest::Client;
+use std::fs::File;
+use std::io::Write;
+use tokio;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(300))
+        .build()?;
+
+    let file_name = "your_file_name";
+    let url = format!("https://your-moonbase-host/api/user/files/{}", file_name);
+
+    let response = client
+        .get(&url)
+        .header("Authorization", "<PUBLIC_API_KEY>")
+        .header("Token", "<jwt_token>")
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        return Err(format!("Download failed: {}", response.status()).into());
+    }
+
+    let bytes = response.bytes().await?;
+    let mut file = File::create("./downloaded_file.ext")?;
+    file.write_all(&bytes)?;
+
+    println!("File downloaded successfully");
+    Ok(())
+}
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="php">
+    ```php
+<?php
+
+function downloadFile(string $fileName, string $token, string $apiKey, string $savePath): void {
+    $url = "https://your-moonbase-host/api/user/files/" . urlencode($fileName);
+
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'GET',
+            'header' => [
+                'Authorization: ' . $apiKey,
+                'Token: ' . $token
+            ],
+            'timeout' => 300,
+            'ignore_errors' => true
+        ]
+    ]);
+
+    $fileContent = file_get_contents($url, false, $context);
+
+    if ($fileContent === false) {
+        throw new Exception('Failed to download file');
+    }
+
+    // Check HTTP status code
+    if (isset($http_response_header)) {
+        preg_match('/HTTP\/\d+\.\d+ (\d+)/', $http_response_header[0], $matches);
+        $httpCode = (int)$matches[1];
+
+        if ($httpCode !== 200) {
+            throw new Exception("Download failed with HTTP code: $httpCode");
+        }
+    }
+
+    if (file_put_contents($savePath, $fileContent) === false) {
+        throw new Exception('Failed to save file');
+    }
+
+    echo "File downloaded successfully to $savePath\n";
+}
+
+// Usage
+try {
+    downloadFile('your_file_name', '<jwt_token>', '<PUBLIC_API_KEY>', './downloaded_file.ext');
+} catch (Exception $e) {
+    echo "Error: " . $e->getMessage() . PHP_EOL;
+}
+
+?>
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="swift">
+    ```swift
+import Foundation
+
+class FileDownloadClient {
+    static let shared = FileDownloadClient()
+    private let session = URLSession.shared
+
+    func downloadFile(
+        fileName: String,
+        token: String,
+        apiKey: String,
+        savePath: URL
+    ) async throws {
+        guard let url = URL(string: "https://your-moonbase-host/api/user/files/\(fileName)") else {
+            throw URLError(.badURL)
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue(apiKey, forHTTPHeaderField: "Authorization")
+        request.setValue(token, forHTTPHeaderField: "Token")
+        request.timeoutInterval = 300
+
+        let (tempURL, response) = try await session.download(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+
+        try FileManager.default.moveItem(at: tempURL, to: savePath)
+        print("File downloaded to \(savePath.path)")
+    }
+}
+
+// Usage
+Task {
+    do {
+        let savePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("downloaded_file.ext")
+
+        try await FileDownloadClient.shared.downloadFile(
+            fileName: "your_file_name",
+            token: "<jwt_token>",
+            apiKey: "<PUBLIC_API_KEY>",
+            savePath: savePath
+        )
+    } catch {
+        print("Download failed: \(error)")
+    }
+}
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="lua">
+    ```lua
+local http   = require("socket.http")
+local ltn12  = require("ltn12")
+
+local function download_file(file_name, token, api_key, save_path)
+  local url = os.getenv("NEXT_PUBLIC_API_URL") .. "/api/user/files/" .. file_name
+  local response = {}
+
+  local ok, code = http.request{
+    url     = url,
+    method  = "GET",
+    headers = {
+      ["Authorization"] = api_key,
+      ["Token"] = token,
+    },
+    sink = ltn12.sink.table(response),
+  }
+
+  if not ok or code ~= 200 then
+    error("Download failed: HTTP " .. tostring(code))
+  end
+
+  local file = io.open(save_path, "wb")
+  if not file then
+    error("Failed to open file for writing: " .. save_path)
+  end
+
+  file:write(table.concat(response))
+  file:close()
+
+  print("File downloaded to " .. save_path)
+end
+
+-- Usage
+download_file("your_file_name", "<jwt_token>", "<PUBLIC_API_KEY>", "./downloaded_file.ext")
+    ```
+  </CodeBlockTab>
+</CodeBlockTabs>

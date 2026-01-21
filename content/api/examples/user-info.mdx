@@ -1,0 +1,384 @@
+---
+title: User profile examples
+description: Fetch the authenticated user profile in multiple languages.
+---
+
+<Callout type="info" title="Self-hosted base URL">
+  Use the API base URL
+</Callout>
+
+Use your public API key and the JWT from authentication.
+
+<CodeBlockTabs defaultValue="javascript">
+  <CodeBlockTabsList>
+    <CodeBlockTabsTrigger value="javascript">JavaScript</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="typescript">TypeScript</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="python">Python</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="java">Java</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="csharp">C#</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="cpp">C++</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="ruby">Ruby</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="go">Go</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="rust">Rust</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="php">PHP</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="swift">Swift</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="lua">Lua</CodeBlockTabsTrigger>
+  </CodeBlockTabsList>
+  <CodeBlockTab value="javascript">
+    ```javascript
+fetch('https://your-moonbase-host/api/user/info', {
+  method: 'GET',
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    'Authorization': '<PUBLIC_API_KEY>',
+    'Token': '<jwt_token>'
+  }
+})
+.then(response => response.json())
+.then(data => console.log(data))
+.catch(error => console.error('Error:', error));
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="typescript">
+    ```typescript
+interface UserInfoResponse {
+  // define your response properties
+}
+
+const getUserInfo = async (token: string, apiKey: string): Promise<UserInfoResponse> => {
+  try {
+    const response = await fetch('https://your-moonbase-host/api/user/info', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': apiKey,
+        'Token': token
+      }
+    });
+
+    return await response.json() as UserInfoResponse;
+  } catch (error) {
+    throw new Error(`Request failed: ${error}`);
+  }
+};
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="python">
+    ```python
+import requests
+import json
+
+def get_user_info(token: str, api_key: str):
+    url = 'https://your-moonbase-host/api/user/info'
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': api_key,
+        'Token': token
+    }
+
+    response = requests.get(url, headers=headers, timeout=10)
+    response.raise_for_status()
+    return response.json()
+
+
+result = get_user_info('<jwt_token>', '<PUBLIC_API_KEY>')
+print(json.dumps(result, indent=2))
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="java">
+    ```java
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.net.URI;
+import java.time.Duration;
+
+public class InfoClient {
+    private static final HttpClient client = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofSeconds(10))
+        .build();
+
+    public static String getUserInfo(String token, String apiKey) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://your-moonbase-host/api/user/info"))
+            .header("Content-Type", "application/json")
+            .header("Authorization", apiKey)
+            .header("Token", token)
+            .GET()
+            .timeout(Duration.ofSeconds(30))
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        return response.body();
+    }
+}
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="csharp">
+    ```csharp
+using System;
+using System.Net.Http;
+using System.Threading.Tasks;
+
+public class InfoClient
+{
+    private static readonly HttpClient httpClient = new HttpClient();
+
+    public static async Task<string> GetUserInfoAsync(string token, string apiKey)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, "https://your-moonbase-host/api/user/info");
+        request.Headers.Add("Content-Type", "application/json");
+        request.Headers.Add("Accept", "application/json");
+        request.Headers.Add("Authorization", apiKey);
+        request.Headers.Add("Token", token);
+
+        var response = await httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsStringAsync();
+    }
+}
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="cpp">
+    ```cpp
+#include <curl/curl.h>
+#include <iostream>
+#include <string>
+
+static size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* s)
+{
+    size_t newLength = size * nmemb;
+    s->append((char*)contents, newLength);
+    return newLength;
+}
+
+std::string getUserInfo(const std::string& token, const std::string& apiKey) {
+    CURL* curl = curl_easy_init();
+    if (!curl) throw std::runtime_error("Failed to initialize CURL");
+
+    std::string response;
+    struct curl_slist* headers = nullptr;
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    headers = curl_slist_append(headers, ("Authorization: " + apiKey).c_str());
+    headers = curl_slist_append(headers, ("Token: " + token).c_str());
+
+    curl_easy_setopt(curl, CURLOPT_URL, "https://your-moonbase-host/api/user/info");
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+
+    CURLcode res = curl_easy_perform(curl);
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(curl);
+
+    if (res != CURLE_OK) throw std::runtime_error("CURL request failed");
+    return response;
+}
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="ruby">
+    ```ruby
+require 'net/http'
+require 'json'
+require 'uri'
+
+class InfoClient
+  API_URL = 'https://your-moonbase-host/api/user/info'
+
+  def self.get_user_info(token, api_key)
+    uri = URI(API_URL)
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = uri.scheme == 'https'
+    http.read_timeout = 30
+
+    request = Net::HTTP::Get.new(uri)
+    request['Content-Type'] = 'application/json'
+    request['Accept'] = 'application/json'
+    request['Authorization'] = api_key
+    request['Token'] = token
+
+    response = http.request(request)
+
+    case response
+    when Net::HTTPSuccess
+      JSON.parse(response.body)
+    else
+      raise "Request failed: #{response.code} #{response.message}"
+    end
+  end
+end
+
+result = InfoClient.get_user_info('<jwt_token>', '<PUBLIC_API_KEY>')
+puts JSON.pretty_generate(result)
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="go">
+    ```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "net/http"
+    "time"
+    "io/ioutil"
+)
+
+func getUserInfo(ctx context.Context, token, apiKey string) ([]byte, error) {
+    client := &http.Client{Timeout: 30 * time.Second}
+    req, err := http.NewRequestWithContext(ctx, "GET", "https://your-moonbase-host/api/user/info", nil)
+    if err != nil {
+        return nil, err
+    }
+    req.Header.Set("Content-Type", "application/json")
+    req.Header.Set("Accept", "application/json")
+    req.Header.Set("Authorization", apiKey)
+    req.Header.Set("Token", token)
+
+    resp, err := client.Do(req)
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+
+    return ioutil.ReadAll(resp.Body)
+}
+
+func main() {
+    ctx := context.Background()
+    data, err := getUserInfo(ctx, "<jwt_token>", "<PUBLIC_API_KEY>")
+    if err != nil { panic(err) }
+    fmt.Println(string(data))
+}
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="rust">
+    ```rust
+use reqwest::Client;
+use tokio;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()?;
+
+    let response = client
+        .get("https://your-moonbase-host/api/user/info")
+        .header("Content-Type", "application/json")
+        .header("Authorization", "<PUBLIC_API_KEY>")
+        .header("Token", "<jwt_token>")
+        .send()
+        .await?;
+
+    let body = response.text().await?;
+    println!("{}", body);
+    Ok(())
+}
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="php">
+    ```php
+<?php
+
+function getUserInfo(string $token, string $apiKey): string {
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'GET',
+            'header' => [
+                'Content-Type: application/json',
+                'Accept: application/json',
+                'Authorization: ' . $apiKey,
+                'Token: ' . $token
+            ],
+            'timeout' => 30,
+            'ignore_errors' => true
+        ]
+    ]);
+
+    $response = file_get_contents('https://your-moonbase-host/api/user/info', false, $context);
+    if ($response === false) {
+        throw new Exception('HTTP request failed');
+    }
+    return $response;
+}
+
+try {
+    echo getUserInfo('<jwt_token>', '<PUBLIC_API_KEY>');
+} catch (Exception $e) {
+    echo $e->getMessage();
+}
+?>
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="swift">
+    ```swift
+import Foundation
+
+class InfoClient {
+    static let shared = InfoClient()
+    private let session = URLSession.shared
+
+    func getUserInfo(token: String, apiKey: String) async throws -> Data {
+        guard let url = URL(string: "https://your-moonbase-host/api/user/info") else {
+            throw URLError(.badURL)
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(apiKey, forHTTPHeaderField: "Authorization")
+        request.setValue(token, forHTTPHeaderField: "Token")
+        request.timeoutInterval = 30
+
+        let (data, _) = try await session.data(for: request)
+        return data
+    }
+}
+
+Task {
+    do {
+        let data = try await InfoClient.shared.getUserInfo(token: "<jwt_token>", apiKey: "<PUBLIC_API_KEY>")
+        print(String(data: data, encoding: .utf8) ?? "")
+    } catch {
+        print("Request failed: \(error)")
+    }
+}
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="lua">
+    ```lua
+local http   = require("socket.http")
+local ltn12  = require("ltn12")
+
+local function get_user_info(token, api_key)
+  local url = os.getenv("NEXT_PUBLIC_API_URL") .. "/api/user/info"
+  local response = {}
+
+  local ok, code = http.request{
+    url     = url,
+    method  = "GET",
+    headers = {
+      ["Content-Type"] = "application/json",
+      ["Accept"]       = "application/json",
+      ["Authorization"] = api_key,
+      ["Token"] = token,
+    },
+    sink = ltn12.sink.table(response),
+  }
+
+  if not ok or code ~= 200 then
+    error("Request failed: HTTP " .. tostring(code))
+  end
+
+  return table.concat(response)
+end
+
+local result = get_user_info("<jwt_token>", "<PUBLIC_API_KEY>")
+print(result)
+    ```
+  </CodeBlockTab>
+</CodeBlockTabs>

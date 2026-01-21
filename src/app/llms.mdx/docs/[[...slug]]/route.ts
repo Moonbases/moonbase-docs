@@ -1,11 +1,13 @@
-import { getLLMText, source } from '@/lib/source';
+import { apiSource, getLLMText, source } from '@/lib/source';
 import { notFound } from 'next/navigation';
 
 export const revalidate = false;
 
 export async function GET(_req: Request, { params }: RouteContext<'/llms.mdx/docs/[[...slug]]'>) {
   const { slug } = await params;
-  const page = source.getPage(slug);
+  const slugs = slug ?? [];
+  const page =
+    slugs[0] === 'api' ? apiSource.getPage(slugs.slice(1)) : source.getPage(slugs);
   if (!page) notFound();
 
   return new Response(await getLLMText(page), {
@@ -16,5 +18,10 @@ export async function GET(_req: Request, { params }: RouteContext<'/llms.mdx/doc
 }
 
 export function generateStaticParams() {
-  return source.generateParams();
+  const apiParams = apiSource.generateParams().map((param) => ({
+    ...param,
+    slug: ['api', ...(param.slug ?? [])],
+  }));
+
+  return [...source.generateParams(), ...apiParams];
 }

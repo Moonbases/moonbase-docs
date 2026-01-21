@@ -1,0 +1,110 @@
+---
+title: Authentication
+description: Exchange credentials for a JWT and apply it to secured endpoints.
+---
+
+<Callout type="warning" title="Keep credentials off the client">
+  Only call the authentication endpoint from trusted environments. Avoid storing raw passwords in client code.
+</Callout>
+
+## Login flow
+
+<Steps>
+  <Step>Copy your public API key from the console output on first startup.</Step>
+  <Step>Send credentials to `POST /api/auth/user`.</Step>
+  <Step>Store the JWT from `status_data.jwt` securely.</Step>
+  <Step>Attach `Authorization` and `Token` headers to user scoped requests.</Step>
+</Steps>
+
+## Request body
+
+<TypeTable
+  type={{
+    username: { type: 'string', description: 'Moonbase account username.', required: true },
+    password: { type: 'string', description: 'Moonbase account password.', required: true },
+    hwid: { type: 'string', description: 'Optional hardware identifier.', required: false },
+  }}
+/>
+
+<Tabs items={['Request', 'Response']} defaultIndex={0}>
+  <Tab>
+    ```json
+    {
+      "username": "your_username",
+      "password": "your_password",
+      "hwid": "optional_hwid"
+    }
+    ```
+  </Tab>
+  <Tab>
+    ```json
+    {
+      "status_message": "USER_LOGGED_IN",
+      "status_overview": "success",
+      "status_code": 200,
+      "status_data": {
+        "user": "your_username",
+        "jwt": "<token>"
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Example request
+
+<CodeBlockTabs defaultValue="curl">
+  <CodeBlockTabsList>
+    <CodeBlockTabsTrigger value="curl">cURL</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="javascript">JavaScript</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="python">Python</CodeBlockTabsTrigger>
+  </CodeBlockTabsList>
+  <CodeBlockTab value="curl">
+    ```bash
+    curl -X POST "https://your-moonbase-host/api/auth/user" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "username": "your_username",
+        "password": "your_password",
+        "hwid": "optional_hwid"
+      }'
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="javascript">
+    ```javascript
+    const res = await fetch("https://your-moonbase-host/api/auth/user", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify({
+        username: "your_username",
+        password: "your_password",
+        hwid: "optional_hwid"
+      })
+    });
+
+    const data = await res.json();
+    console.log(data);
+    ```
+  </CodeBlockTab>
+  <CodeBlockTab value="python">
+    ```python
+    import requests
+
+    res = requests.post(
+        "https://your-moonbase-host/api/auth/user",
+        json={
+            "username": "your_username",
+            "password": "your_password",
+            "hwid": "optional_hwid"
+        },
+        headers={"Content-Type": "application/json"},
+        timeout=10,
+    )
+
+    print(res.json())
+    ```
+  </CodeBlockTab>
+</CodeBlockTabs>

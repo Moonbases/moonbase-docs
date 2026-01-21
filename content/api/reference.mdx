@@ -1,0 +1,231 @@
+---
+title: API Reference
+description: Endpoint definitions for auth, user profile, and file downloads.
+---
+
+<Callout type="info" title="Conventions">
+  All endpoints accept JSON and return JSON unless noted. Use `Authorization` for the public API key and `Token` for the user JWT.
+</Callout>
+
+Your public API key is printed to the server console on first startup.
+
+<Accordions type="single" collapsible>
+  <Accordion title="POST /api/auth/user">
+    Authenticates a user and returns a JWT for subsequent requests.
+
+    <TypeTable
+      type={{
+        username: { type: 'string', description: 'Moonbase account username.', required: true },
+        password: { type: 'string', description: 'Moonbase account password.', required: true },
+        hwid: { type: 'string', description: 'Optional hardware identifier.', required: false },
+      }}
+    />
+
+    <Tabs items={['Request', 'Response', 'Status codes']} defaultIndex={0}>
+      <Tab>
+        ```json
+        {
+          "username": "your_username",
+          "password": "your_password",
+          "hwid": "optional_hwid"
+        }
+        ```
+      </Tab>
+      <Tab>
+        ```json
+        {
+          "status_message": "USER_LOGGED_IN",
+          "status_overview": "success",
+          "status_code": 200,
+          "status_data": {
+            "user": "your_username",
+            "jwt": "<token>"
+          }
+        }
+        ```
+      </Tab>
+      <Tab>
+        - 200 SUCCESS
+        - 401 UNAUTHORIZED
+        - 403 FORBIDDEN
+        - 429 RATE_LIMITED
+      </Tab>
+    </Tabs>
+
+    <CodeBlockTabs defaultValue="curl">
+      <CodeBlockTabsList>
+        <CodeBlockTabsTrigger value="curl">cURL</CodeBlockTabsTrigger>
+        <CodeBlockTabsTrigger value="javascript">JavaScript</CodeBlockTabsTrigger>
+      </CodeBlockTabsList>
+      <CodeBlockTab value="curl">
+        ```bash
+        curl -X POST "https://your-moonbase-host/api/auth/user" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "username": "your_username",
+            "password": "your_password",
+            "hwid": "optional_hwid"
+          }'
+        ```
+      </CodeBlockTab>
+      <CodeBlockTab value="javascript">
+        ```javascript
+        const res = await fetch("https://your-moonbase-host/api/auth/user", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          },
+          body: JSON.stringify({
+            username: "your_username",
+            password: "your_password",
+            hwid: "optional_hwid"
+          })
+        });
+
+        const data = await res.json();
+        ```
+      </CodeBlockTab>
+    </CodeBlockTabs>
+  </Accordion>
+
+  <Accordion title="GET /api/user/info">
+    Returns profile data for the authenticated user.
+
+    <TypeTable
+      type={{
+        Authorization: { type: 'string', description: 'Public API key.', required: true },
+        Token: { type: 'string', description: 'JWT from the auth endpoint.', required: true },
+        'Content-Type': { type: 'string', description: 'application/json', required: false },
+      }}
+    />
+
+    <Tabs items={['Request', 'Response', 'Status codes']} defaultIndex={0}>
+      <Tab>
+        ```http
+        GET /api/user/info
+        Authorization: <PUBLIC_API_KEY>
+        Token: <jwt_token>
+        ```
+      </Tab>
+      <Tab>
+        ```json
+        {
+          "status_message": "USER_INFO_RETRIEVED",
+          "status_overview": "success",
+          "status_code": 200,
+          "status_data": {
+            "user": { ... }
+          }
+        }
+        ```
+      </Tab>
+      <Tab>
+        - 200 SUCCESS
+        - 401 UNAUTHORIZED
+        - 403 FORBIDDEN
+        - 404 NOT_FOUND
+        - 429 RATE_LIMITED
+      </Tab>
+    </Tabs>
+
+    <CodeBlockTabs defaultValue="curl">
+      <CodeBlockTabsList>
+        <CodeBlockTabsTrigger value="curl">cURL</CodeBlockTabsTrigger>
+        <CodeBlockTabsTrigger value="javascript">JavaScript</CodeBlockTabsTrigger>
+      </CodeBlockTabsList>
+      <CodeBlockTab value="curl">
+        ```bash
+        curl -X GET "https://your-moonbase-host/api/user/info" \
+          -H "Authorization: <PUBLIC_API_KEY>" \
+          -H "Token: <jwt_token>"
+        ```
+      </CodeBlockTab>
+      <CodeBlockTab value="javascript">
+        ```javascript
+        const res = await fetch("https://your-moonbase-host/api/user/info", {
+          method: "GET",
+          headers: {
+            Authorization: "<PUBLIC_API_KEY>",
+            Token: "<jwt_token>"
+          }
+        });
+
+        const data = await res.json();
+        ```
+      </CodeBlockTab>
+    </CodeBlockTabs>
+  </Accordion>
+
+  <Accordion title="GET /api/user/files/:file">
+    Downloads a user file. This endpoint returns binary data on success.
+
+    <TypeTable
+      type={{
+        Authorization: { type: 'string', description: 'Public API key.', required: true },
+        Token: { type: 'string', description: 'JWT from the auth endpoint.', required: true },
+        file: { type: 'string', description: 'The filename to download.', required: true },
+      }}
+    />
+
+    <Tabs items={['Request', 'Response', 'Status codes']} defaultIndex={0}>
+      <Tab>
+        ```http
+        GET /api/user/files/:file
+        Authorization: <PUBLIC_API_KEY>
+        Token: <jwt_token>
+        ```
+      </Tab>
+      <Tab>
+        ```text
+        Content-Disposition: attachment; filename="original_filename.ext"
+        Content-Type: application/octet-stream
+        Content-Length: <file_size>
+        ```
+      </Tab>
+      <Tab>
+        - 200 SUCCESS
+        - 401 UNAUTHORIZED
+        - 403 ACCESS_DENIED
+        - 404 NOT_FOUND
+        - 429 RATE_LIMITED
+      </Tab>
+    </Tabs>
+
+    <Callout type="info" title="Binary responses">
+      On success, the body is raw file data. Handle it as a stream or blob depending on your client.
+    </Callout>
+
+    <CodeBlockTabs defaultValue="curl">
+      <CodeBlockTabsList>
+        <CodeBlockTabsTrigger value="curl">cURL</CodeBlockTabsTrigger>
+        <CodeBlockTabsTrigger value="javascript">JavaScript</CodeBlockTabsTrigger>
+      </CodeBlockTabsList>
+      <CodeBlockTab value="curl">
+        ```bash
+        curl -L "https://your-moonbase-host/api/user/files/your_file_name" \
+          -H "Authorization: <PUBLIC_API_KEY>" \
+          -H "Token: <jwt_token>" \
+          -o downloaded_file.ext
+        ```
+      </CodeBlockTab>
+      <CodeBlockTab value="javascript">
+        ```javascript
+        const res = await fetch(
+          "https://your-moonbase-host/api/user/files/your_file_name",
+          {
+            method: "GET",
+            headers: {
+              Authorization: "<PUBLIC_API_KEY>",
+              Token: "<jwt_token>"
+            }
+          }
+        );
+
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        ```
+      </CodeBlockTab>
+    </CodeBlockTabs>
+  </Accordion>
+</Accordions>
