@@ -1,0 +1,43 @@
+---
+title: Coinbase Setup
+description: Configure Coinbase Commerce keys and webhook events.
+---
+
+<Steps>
+  <Step>
+    ### 1. Create a Commerce wallet
+
+    Sign up at https://beta.commerce.coinbase.com/payments.
+  </Step>
+  <Step>
+    ### 2. Set your business name
+
+    Configure it at https://beta.commerce.coinbase.com/settings/business.
+  </Step>
+  <Step>
+    ### 3. Copy your API key
+
+    Get it from https://beta.commerce.coinbase.com/settings/security.
+  </Step>
+  <Step>
+    ### 4. Create a webhook endpoint
+
+    Get the webhook secret from https://beta.commerce.coinbase.com/settings/notifications.
+
+    Add an endpoint pointing to:
+
+    ```
+    http://<your-host>:80/api/purchase/webhook/coinbase
+    ```
+  </Step>
+  <Step>
+    ### 5. Enable required events
+
+    - `charge:confirmed`
+    - `charge:failed`
+  </Step>
+</Steps>
+
+<Callout type="note" title="Public endpoint required">
+  Coinbase must be able to reach your webhook URL. Use your public host or domain.
+</Callout>

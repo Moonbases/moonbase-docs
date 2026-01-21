@@ -1,0 +1,28 @@
+---
+title: Troubleshooting
+description: Fix common setup and launch issues.
+---
+
+Before digging deeper, verify these basics:
+- The API process is running and showing no startup errors.
+- Your keys are saved correctly in `app/.env`.
+- You rebuilt the app after changing `.env` values.
+
+<Accordions type="single" collapsible>
+  <Accordion title="Dashboard login fails after setup">
+    **Cause:** The batch file sometimes fails when invoking the `npm` process.
+
+    **Fix:** Run both services manually:
+
+    ```bash
+    cd app
+    npm run build
+    npm run start
+    ```
+
+    ```bash
+    cd api
+    node index.js
+    ```
+  </Accordion>
+</Accordions>

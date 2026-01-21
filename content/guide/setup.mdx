@@ -1,0 +1,53 @@
+---
+title: Initial Setup
+description: Install dependencies, run the API once, and store your keys safely.
+---
+
+Once the repo is cloned, you will see this structure:
+
+<Files>
+  <Folder name="moonbase" defaultOpen>
+    <File name="install.bat" />
+    <File name="api.bat" />
+    <File name="app.bat" />
+    <Folder name="api" defaultOpen>
+      <File name=".env" />
+      <File name="index.js" />
+    </Folder>
+    <Folder name="app" defaultOpen>
+      <File name=".env" />
+      <File name="(front-end files)" />
+    </Folder>
+  </Folder>
+</Files>
+
+## 1. Install dependencies
+
+```bash
+.\install.bat
+```
+
+This installs everything for both the API and the app.
+
+## 2. First API run (get your keys)
+
+```bash
+.\api.bat
+```
+
+<Callout type="warning" title="Save keys immediately">
+  The Public API Key and Private API Key are printed once in the server console on first startup. Save them right away.
+</Callout>
+
+## 3. Add keys to `app/.env`
+
+Open `app/.env` and add:
+
+```
+PUBLIC_API_KEY=your_public_key_here
+PRIVATE_API_KEY=your_private_key_here
+```
+
+## 4. Configure the rest of the environment
+
+Update any remaining `.env` values in `api/.env` and `app/.env` for your host, port, and payment provider settings.

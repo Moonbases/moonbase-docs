@@ -1,5 +1,14 @@
 {
   "title": "Moonbase Guide",
   "root": true,
-  "pages": ["index"]
+  "pages": [
+    "index",
+    "installation",
+    "setup",
+    "operations",
+    "---Payments---",
+    "...payments",
+    "---Troubleshooting---",
+    "troubleshooting"
+  ]
 }

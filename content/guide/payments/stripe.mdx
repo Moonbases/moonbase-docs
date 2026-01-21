@@ -1,0 +1,32 @@
+---
+title: Stripe Setup
+description: Create a Stripe webhook and provide your secret key.
+---
+
+<Steps>
+  <Step>
+    ### 1. Get your Stripe secret key
+
+    Create a Stripe account and copy the secret key from the dashboard.
+  </Step>
+  <Step>
+    ### 2. Create a webhook
+
+    Set the destination URL to your API host:
+
+    ```
+    http://<your-host>:80/api/purchase/webhook
+    ```
+  </Step>
+  <Step>
+    ### 3. Enable the checkout event
+
+    Subscribe to:
+
+    - `checkout.session.completed`
+  </Step>
+</Steps>
+
+<Callout type="note" title="Use your real domain">
+  If your API is public, use your domain and HTTPS. Stripe must be able to reach the URL from the internet.
+</Callout>

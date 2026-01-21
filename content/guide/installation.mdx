@@ -1,0 +1,41 @@
+---
+title: Installation via GitHub
+description: Get access to the repository, clone it locally, and pull updates.
+---
+
+Use GitHub for painless updates without downloading new release packages each time.
+
+<Steps>
+  <Step>
+    ### 1. Access the repository
+
+    - **Download from BuiltByBit (optional):** If you already installed via BuiltByBit and want to stay there, you can keep updating manually.
+    - **Request GitHub access:** After your BuiltByBit download, open a #ticket. You will be granted access to the private GitHub repo.
+  </Step>
+  <Step>
+    ### 2. Clone the repo
+
+    - Remove the old BuiltByBit copy if you are switching.
+    - Open a terminal or PowerShell where you want the project.
+
+    ```bash
+    git clone https://github.com/aledlb8/moonbase.git
+    ```
+
+    You now have a `moonbase` folder in your chosen directory.
+  </Step>
+  <Step>
+    ### 3. Pulling updates
+
+    Whenever a new release drops:
+
+    ```bash
+    cd moonbase
+    git pull
+    ```
+  </Step>
+</Steps>
+
+<Callout type="note" title="Environment files are not tracked">
+  Your `.env` files stay local and are not committed to Git. If we add or rename env variables, update them manually when told.
+</Callout>

@@ -1,0 +1,39 @@
+---
+title: Build and Run
+description: Rebuild the app and start the API and frontend services.
+---
+
+## Rebuild the app
+
+```bash
+cd app
+npm run build
+```
+
+## Start the services
+
+Run the API first so it can initialize, then start the app.
+
+<Tabs items={['Batch files', 'Manual commands']} defaultIndex={0}>
+  <Tab>
+    ```bash
+    .\api.bat
+    .\app.bat
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    cd api
+    node index.js
+    ```
+
+    ```bash
+    cd app
+    npm run start
+    ```
+  </Tab>
+</Tabs>
+
+<Callout type="note" title="Use your real host">
+  When configuring clients or webhooks, use the public host where your Moonbase API runs, not `localhost`.
+</Callout>

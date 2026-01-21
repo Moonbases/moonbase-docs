@@ -1,0 +1,31 @@
+---
+title: PayPal Setup
+description: Create a REST API app and subscribe to capture events.
+---
+
+<Steps>
+  <Step>
+    ### 1. Create a REST API app
+
+    Go to https://developer.paypal.com/dashboard and create a REST API app.
+    Copy the Client ID and Secret into your environment configuration.
+  </Step>
+  <Step>
+    ### 2. Add a webhook
+
+    From https://developer.paypal.com/dashboard/webhooks, add a webhook URL:
+
+    ```
+    http://<your-host>:80/api/purchase/webhook/paypal
+    ```
+  </Step>
+  <Step>
+    ### 3. Subscribe to the event
+
+    - `PAYMENT.CAPTURE.COMPLETED`
+  </Step>
+</Steps>
+
+<Callout type="note" title="Live vs sandbox">
+  Make sure you are using the right credentials and webhook type for your environment.
+</Callout>
