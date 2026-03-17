@@ -59,19 +59,27 @@ description: Example plugins for frontend and backend.
         };
         ```
       </Accordion>
-      <Accordion title="Intercept a purchase flow">
+      <Accordion title="React to a fulfilled purchase">
         ```js
         module.exports = {
-          name: 'purchase-tag',
+          name: 'purchase-sync',
           register(ctx) {
-            const original = ctx.modules.purchase.webhook;
-            ctx.modules.purchase.webhook = async (req, res) => {
-              await original(req, res);
-              ctx.logger.info('purchase webhook handled');
-            };
+            ctx.hooks.onPurchaseFulfilled(async (payload) => {
+              for (const item of payload.items) {
+                ctx.logger.info('syncing fulfilled item', {
+                  eventId: payload.eventId,
+                  provider: payload.provider,
+                  user: payload.user.email,
+                  product: item.product.slug,
+                  plan: item.plan
+                });
+              }
+            });
           }
         };
         ```
+
+        Use this hook for provisioning and post-purchase sync work. It runs after Moonbase has already granted access.
       </Accordion>
     </Accordions>
   </Tab>

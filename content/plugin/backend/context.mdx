@@ -12,7 +12,7 @@ Every backend plugin gets a `PluginContext` object.
     - `app`: Express app instance.
     - `env`: `process.env`.
     - `logger`: Moonbase logger.
-    - `hooks`: lifecycle hooks (routes ready, shutdown).
+    - `hooks`: backend hooks including `onRoutesReady`, `onPurchaseFulfilled`, and `onShutdown`.
     - `paths`: `rootDir`, `pluginsDir`.
   </Tab>
   <Tab>
@@ -28,14 +28,18 @@ Every backend plugin gets a `PluginContext` object.
     - `services.emailService`
   </Tab>
   <Tab>
-    - `modules.purchase` (route module; can be wrapped or patched)
+    - `modules.purchase` (route module; can still be wrapped or patched)
     - `core.controllers`, `core.models`, `core.helpers`, `core.utils`
   </Tab>
 </Tabs>
 
+<Callout type="info" title="Preferred purchase integration point">
+  If your plugin only needs to run after a checkout is fulfilled, use `ctx.hooks.onPurchaseFulfilled(...)`. Reach for `ctx.modules.purchase` only when you truly need to wrap provider-specific behavior.
+</Callout>
+
 ## Examples
 
-<Tabs items={['Add a route', 'Patch a service']} defaultIndex={0}>
+<Tabs items={['Add a route', 'React to fulfilled purchases', 'Patch a service']} defaultIndex={0}>
   <Tab>
     ```js
     module.exports = {
@@ -43,6 +47,27 @@ Every backend plugin gets a `PluginContext` object.
       register(ctx) {
         ctx.routers.api.get('/plugins/status', (_req, res) => {
           res.json({ status_overview: 'success', status_message: 'OK' });
+        });
+      }
+    };
+    ```
+  </Tab>
+  <Tab>
+    ```js
+    module.exports = {
+      name: 'provisioner',
+      register(ctx) {
+        ctx.hooks.onPurchaseFulfilled(async (payload) => {
+          for (const item of payload.items) {
+            if (item.product.slug !== 'game-server-basic') continue;
+
+            ctx.logger.info('provisioning server', {
+              user: payload.user.email,
+              product: item.product.slug,
+              plan: item.plan,
+              quantity: item.quantity
+            });
+          }
         });
       }
     };

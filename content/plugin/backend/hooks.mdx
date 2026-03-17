@@ -1,15 +1,21 @@
 ---
 title: Backend Hooks
-description: Run logic when routes are ready or on shutdown.
+description: Run logic when routes are ready, when purchases are fulfilled, or on shutdown.
 ---
 
-The backend loader exposes two hook points:
+The backend loader exposes three hook points:
 
 <TypeTable
   type={{
     'hooks.onRoutesReady(callback)': {
       type: '(callback) => void',
       description: 'Runs after routes are registered.',
+      required: true
+    },
+    'hooks.onPurchaseFulfilled(callback)': {
+      type: '(callback) => void',
+      description:
+        'Runs after Moonbase finishes fulfilling a successful checkout, including free checkouts.',
       required: true
     },
     'hooks.onShutdown(callback)': {
@@ -21,15 +27,94 @@ The backend loader exposes two hook points:
 />
 
 <Callout type="info" title="When to use hooks">
-  Use them for actions that must wait until routes are registered or for cleanup before the API shuts down.
+  Use `onPurchaseFulfilled` for post-purchase integrations like provisioning, syncing licenses, or notifying third-party services. Prefer it over wrapping payment-provider webhooks when you only need logic after Moonbase has already granted access.
 </Callout>
+
+## Purchase fulfilled payload
+
+The `onPurchaseFulfilled` callback receives a single `payload` object:
+
+<TypeTable
+  type={{
+    eventId: {
+      type: 'string',
+      description: 'Unique identifier for the fulfillment event.',
+      required: true
+    },
+    provider: {
+      type: "'free' | 'stripe' | 'coinbase' | 'paypal' | string",
+      description: 'Payment provider used for the checkout.',
+      required: true
+    },
+    currency: {
+      type: 'string',
+      description: 'Order currency, usually `USD` in the current checkout flow.',
+      required: true
+    },
+    userId: {
+      type: 'string',
+      description: 'Moonbase user id for the customer.',
+      required: true
+    },
+    user: {
+      type: 'object',
+      description: 'Moonbase user document loaded during fulfillment.',
+      required: true
+    },
+    items: {
+      type: 'Array<{ productId, product, plan, quantity }>',
+      description: 'Products that were fulfilled in the order.',
+      required: true
+    }
+  }}
+/>
+
+Each item in `payload.items` includes:
+
+<TypeTable
+  type={{
+    productId: {
+      type: 'string',
+      description: 'Product id stored in Moonbase.',
+      required: true
+    },
+    product: {
+      type: 'object',
+      description: 'Product document, including fields like `name`, `slug`, and pricing.',
+      required: true
+    },
+    plan: {
+      type: 'string',
+      description: 'Purchased access plan such as `lifetime`, `monthly`, or `yearly`.',
+      required: true
+    },
+    quantity: {
+      type: 'number',
+      description: 'Quantity fulfilled for that product entry.',
+      required: true
+    }
+  }}
+/>
 
 ```js
 module.exports = {
-  name: 'cleanup-example',
+  name: 'fulfillment-example',
   register(ctx) {
     ctx.hooks.onRoutesReady(() => {
       ctx.logger.info('routes ready');
+    });
+
+    ctx.hooks.onPurchaseFulfilled(async (payload) => {
+      for (const item of payload.items) {
+        ctx.logger.info('fulfilled purchase item', {
+          eventId: payload.eventId,
+          provider: payload.provider,
+          userId: payload.userId,
+          product: item.product.slug,
+          plan: item.plan,
+          quantity: item.quantity
+        });
+      }
     });
 
     ctx.hooks.onShutdown(() => {
