@@ -9,9 +9,9 @@ export default function DocsPage() {
           Moonbase Documentation
         </h1>
         <p className="text-lg text-muted-foreground max-w-2xl leading-relaxed">
-          Moonbase is a self-hosted digital storefront platform with built-in payment processing,
-          extensible plugin architecture, and a comprehensive REST API. Deploy your own store
-          with support for Stripe, PayPal, and Coinbase Commerce.
+          Moonbase 2.0 is a self-hosted storefront and license delivery platform for digital
+          products: Stripe, PayPal and Coinbase Commerce payments, subscriptions, signed license
+          tokens with SDKs for your software, a plugin system, and a REST API.
         </p>
       </div>
 
@@ -29,7 +29,7 @@ export default function DocsPage() {
               Moonbase Guide
             </h3>
             <p className="text-muted-foreground text-sm mb-4">
-              Install, configure, and run your self-hosted Moonbase instance. Set up payment providers and manage your store.
+              Install or upgrade your self-hosted Moonbase, connect payment providers and set up every store feature.
             </p>
             <div className="text-sm text-teal-600 dark:text-teal-400 font-medium flex items-center gap-1">
               Get started
@@ -48,7 +48,7 @@ export default function DocsPage() {
               Plugin Docs
             </h3>
             <p className="text-muted-foreground text-sm mb-4">
-              Extend Moonbase with custom backend and frontend plugins. Build integrations without touching core code.
+              Extend Moonbase with backend and frontend plugins, and migrate plugins written for 1.8.
             </p>
             <div className="text-sm text-blue-600 dark:text-blue-400 font-medium flex items-center gap-1">
               Explore plugins
@@ -67,7 +67,7 @@ export default function DocsPage() {
               API Reference
             </h3>
             <p className="text-muted-foreground text-sm mb-4">
-              REST endpoints for authentication, user data, and file downloads. JWT-based auth with comprehensive examples.
+              License tokens and SDKs for loaders, the admin and reseller APIs with API keys, outgoing webhooks and the legacy v1 API.
             </p>
             <div className="text-sm text-pink-600 dark:text-pink-400 font-medium flex items-center gap-1">
               View API docs

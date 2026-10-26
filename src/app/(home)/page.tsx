@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Rocket, Puzzle, Code2, CreditCard, Zap, Shield } from 'lucide-react';
+import { Rocket, Puzzle, Code2, CreditCard, Zap, Shield, KeyRound, BadgePercent, Users } from 'lucide-react';
 
 export default function HomePage() {
   return (
@@ -9,7 +9,7 @@ export default function HomePage() {
           Moonbase
         </h1>
         <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl leading-relaxed">
-          Self-hosted platform with extensible plugins and payment integrations
+          Self-hosted storefront and license delivery for digital products: payments, subscriptions, signed license tokens, SDKs and plugins.
         </p>
         <div className="flex flex-wrap gap-3 justify-center">
           <Link
@@ -36,7 +36,7 @@ export default function HomePage() {
               Moonbase Guide
             </h3>
             <p className="text-muted-foreground mb-4">
-              Install, configure, and run Moonbase with payments ready. Self-hosted setup guide with step-by-step instructions.
+              Install, upgrade from 1.8, configure payments and use every store feature, step by step.
             </p>
             <div className="text-sm text-teal-600 dark:text-teal-400 font-medium flex items-center gap-1">
               Learn more
@@ -55,7 +55,7 @@ export default function HomePage() {
               Plugin System
             </h3>
             <p className="text-muted-foreground mb-4">
-              Extend backend and frontend without touching core code.
+              Extend the API and the dashboard without touching core code, and migrate 1.8 plugins.
             </p>
             <div className="text-sm text-blue-600 dark:text-blue-400 font-medium flex items-center gap-1">
               Explore plugins
@@ -74,7 +74,7 @@ export default function HomePage() {
               API Reference
             </h3>
             <p className="text-muted-foreground mb-4">
-              Authenticate users, fetch profile data, and download files. JWT-based authentication with comprehensive examples.
+              License tokens and SDKs for your loaders, the admin and reseller APIs, webhooks, and the legacy v1 API.
             </p>
             <div className="text-sm text-pink-600 dark:text-pink-400 font-medium flex items-center gap-1">
               View API docs
@@ -92,9 +92,36 @@ export default function HomePage() {
               <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-muted mb-4">
                 <CreditCard className="size-6" />
               </div>
-              <h3 className="text-xl font-semibold mb-2">Payment Integrations</h3>
+              <h3 className="text-xl font-semibold mb-2">Payments and Subscriptions</h3>
               <p className="text-muted-foreground">
-                Built-in support for Stripe, Coinbase Commerce, and PayPal with webhook handling
+                Stripe, PayPal and Coinbase Commerce, automatic renewals, invoices, credit notes and Stripe Tax.
+              </p>
+            </div>
+            <div className="p-6 border rounded-xl hover:shadow-lg transition-all hover:border-primary/50">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-muted mb-4">
+                <KeyRound className="size-6" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">Licensing for Your Software</h3>
+              <p className="text-muted-foreground">
+                Ed25519-signed license tokens, device limits, seats and floating licenses, with SDKs for Node.js, Python, C#, C++ and Lua.
+              </p>
+            </div>
+            <div className="p-6 border rounded-xl hover:shadow-lg transition-all hover:border-primary/50">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-muted mb-4">
+                <BadgePercent className="size-6" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">Growth Tools</h3>
+              <p className="text-muted-foreground">
+                Discount and creator codes, gift cards and store credit, bundles, resellers and checkout reminders.
+              </p>
+            </div>
+            <div className="p-6 border rounded-xl hover:shadow-lg transition-all hover:border-primary/50">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-muted mb-4">
+                <Users className="size-6" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">Customers and Staff</h3>
+              <p className="text-muted-foreground">
+                Customer dashboard, support tickets, reviews, admin permission areas, API keys and an activity log.
               </p>
             </div>
             <div className="p-6 border rounded-xl hover:shadow-lg transition-all hover:border-primary/50">
@@ -103,7 +130,7 @@ export default function HomePage() {
               </div>
               <h3 className="text-xl font-semibold mb-2">Plugin Architecture</h3>
               <p className="text-muted-foreground">
-                Extend functionality with backend and frontend plugins without modifying core code
+                Extend functionality with backend and frontend plugins without modifying core code.
               </p>
             </div>
             <div className="p-6 border rounded-xl hover:shadow-lg transition-all hover:border-primary/50">
@@ -112,7 +139,7 @@ export default function HomePage() {
               </div>
               <h3 className="text-xl font-semibold mb-2">Self-Hosted Control</h3>
               <p className="text-muted-foreground">
-                Full control over your data and infrastructure with self-hosted deployment
+                Full control over your data and infrastructure, with encrypted secrets and per-account rate limits.
               </p>
             </div>
           </div>
