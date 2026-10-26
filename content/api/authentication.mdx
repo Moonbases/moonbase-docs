@@ -1,110 +1,187 @@
 ---
 title: Authentication
-description: Exchange credentials for a JWT and apply it to secured endpoints.
+description: App keys, session tokens, owner API keys, reseller API keys and rate limits in Moonbase 2.0.
 ---
 
-<Callout type="warning" title="Keep credentials off the client">
-  Only call the authentication endpoint from trusted environments. Avoid storing raw passwords in client code.
+Moonbase uses different credentials for different callers. Pick the row that matches what you are building and ignore the rest.
+
+| Caller | Headers |
+| --- | --- |
+| Customer session (account API, client renewals, v1 user routes) | `Authorization: <public app key>` and `Token: <session token>` |
+| Admin session (what the dashboard sends) | `Authorization: <public or private app key>` and `Token: <session token of an admin>` |
+| Owner API key (server-to-server) | `Authorization: Bearer mbk_…` only |
+| Reseller API key | `Authorization: Bearer mbr_…` only |
+| Public endpoints and sign-in | None |
+
+## App keys
+
+The API creates two app keys on its first start and prints them **once** in its log. They go into the app's `.env` as `PUBLIC_API_KEY` and `PRIVATE_API_KEY`.
+
+- **Public app key**: identifies requests that carry a session token. It is not a secret in practice: loaders embed it (the SDKs' `appKey`, the v1 `Authorization` header). On v2 session routes either key is accepted.
+- **Private app key**: required by the v1 admin routes, and used by the app to sign the visitor IP it forwards. Never put it in client software.
+
+An app key alone grants nothing: every request that uses one also needs a valid session token. A wrong key fails with `401 AUTHENTICATION_FAILED`; a missing `Authorization` or `Token` header with `400 FAILED_AUTHENTICATION`.
+
+<Callout type="warning" title="Regenerating a key breaks clients that embed it">
+  The owner can replace a key with `PATCH /api/dashboard/regenerate-secret` and `{ "secretType": "public" }` or `"private"` (private app key and an owner session; the new key is returned once in `status_data.secret`). Every loader that ships the old public key stops being able to renew, and the app needs the new value in its `.env`.
 </Callout>
 
-## Login flow
+## Session tokens
 
-<Steps>
-  <Step>Copy your public API key from the console output on first startup.</Step>
-  <Step>Send credentials to `POST /api/auth/user`.</Step>
-  <Step>Store the JWT from `status_data.jwt` securely.</Step>
-  <Step>Attach `Authorization` and `Token` headers to user scoped requests.</Step>
-</Steps>
+A session token is a JWT signed with the API's `JWT_SECRET`, valid for **1 day**. Get one by signing in:
 
-## Request body
+| Endpoint | Signs in with | Returns |
+| --- | --- | --- |
+| `POST /api/v2/auth/login` | `email`, `password` | `{ token, expiresIn: "1d", user }` |
+| `POST /api/v2/client/session` | `login` (username or email), `password`, `hwid` | Session token plus a signed license token, see [Client API](/docs/api/client-api) |
+| `POST /api/auth/user` (v1) | `username`, `password`, optional `hwid` | `status_data.jwt`, see [Legacy sign-in](/docs/api/v1/authentication) |
 
-<TypeTable
-  type={{
-    username: { type: 'string', description: 'Moonbase account username.', required: true },
-    password: { type: 'string', description: 'Moonbase account password.', required: true },
-    hwid: { type: 'string', description: 'Optional hardware identifier.', required: false },
-  }}
-/>
+None of these need an app key. They all count toward the [sign-in rate limits](#rate-limits), and they record the caller's IP address against the account's IP limit (Store settings → Security, 3 by default), so a new network can fail with `IP_LIMIT_EXCEEDED`.
 
 <Tabs items={['Request', 'Response']} defaultIndex={0}>
   <Tab>
-    ```json
-    {
-      "username": "your_username",
-      "password": "your_password",
-      "hwid": "optional_hwid"
-    }
-    ```
+```bash
+curl -X POST "https://your-moonbase-host/api/v2/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{ "email": "alice@example.com", "password": "Correct-Horse-9-Battery" }'
+```
   </Tab>
   <Tab>
-    ```json
-    {
-      "status_message": "USER_LOGGED_IN",
-      "status_overview": "success",
-      "status_code": 200,
-      "status_data": {
-        "user": "your_username",
-        "jwt": "<token>"
-      }
+```json
+{
+  "ok": true,
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9…",
+    "expiresIn": "1d",
+    "user": {
+      "id": "665f1c2e9b1d4a0012ab34cd",
+      "email": "alice@example.com",
+      "username": "alice",
+      "role": "user",
+      "permissions": [],
+      "entitlements": [],
+      "…": "…"
     }
-    ```
+  }
+}
+```
   </Tab>
 </Tabs>
 
-## Example request
+Unknown accounts and wrong passwords both fail with `401 INVALID_CREDENTIALS`, so emails cannot be probed. Other failures: `403 BANNED` (with `details.reason`), `403 BLACKLISTED`, `401 IP_LIMIT_EXCEEDED`, `422 VALIDATION_FAILED`, `429 TOO_MANY_ATTEMPTS`.
 
-<CodeBlockTabs defaultValue="curl">
-  <CodeBlockTabsList>
-    <CodeBlockTabsTrigger value="curl">cURL</CodeBlockTabsTrigger>
-    <CodeBlockTabsTrigger value="javascript">JavaScript</CodeBlockTabsTrigger>
-    <CodeBlockTabsTrigger value="python">Python</CodeBlockTabsTrigger>
-  </CodeBlockTabsList>
-  <CodeBlockTab value="curl">
-    ```bash
-    curl -X POST "https://your-moonbase-host/api/auth/user" \
-      -H "Content-Type: application/json" \
-      -d '{
-        "username": "your_username",
-        "password": "your_password",
-        "hwid": "optional_hwid"
-      }'
-    ```
-  </CodeBlockTab>
-  <CodeBlockTab value="javascript">
-    ```javascript
-    const res = await fetch("https://your-moonbase-host/api/auth/user", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      },
-      body: JSON.stringify({
-        username: "your_username",
-        password: "your_password",
-        hwid: "optional_hwid"
-      })
-    });
+### Calling session routes
 
-    const data = await res.json();
-    console.log(data);
-    ```
-  </CodeBlockTab>
-  <CodeBlockTab value="python">
-    ```python
-    import requests
+```bash
+curl "https://your-moonbase-host/api/v2/account" \
+  -H "Authorization: <PUBLIC_API_KEY>" \
+  -H "Token: <session token>"
+```
 
-    res = requests.post(
-        "https://your-moonbase-host/api/auth/user",
-        json={
-            "username": "your_username",
-            "password": "your_password",
-            "hwid": "optional_hwid"
-        },
-        headers={"Content-Type": "application/json"},
-        timeout=10,
-    )
+### Refreshing
 
-    print(res.json())
-    ```
-  </CodeBlockTab>
-</CodeBlockTabs>
+`POST /api/v2/auth/refresh` with `{ "token": "<session token>" }` returns `{ token, expiresIn: "1d", user }`: a new token valid for another day. Only a token that has not expired yet can be refreshed; an expired one fails with `401 INVALID_TOKEN` and the user must sign in again. Loaders don't call this: [`POST /api/v2/client/license`](/docs/api/client-api#renewing-the-license) returns an extended session token on every renewal.
+
+### When a session ends
+
+| Event | Next request with the old token |
+| --- | --- |
+| More than a day without a refresh or renewal | `401 INVALID_TOKEN` |
+| Password changed (all sessions end) | `401 TOKEN_REVOKED` |
+| Account banned | `403 BANNED` |
+| Account deleted | `401 INVALID_USER` |
+| Request IP blacklisted | `403 BLACKLISTED` |
+
+The SDKs report the first, second and fourth case as `SESSION_EXPIRED`.
+
+## API keys (`mbk_`)
+
+API keys let your own servers call the [admin API](/docs/api/admin-api) without a user session. They are made for integrations: a game server granting licenses, a support bot looking up orders, a sync job.
+
+<Steps>
+  <Step>The owner creates a key in **Dashboard → Developers**, choosing a name, one or more areas and an expiry (30, 90 or 365 days, or never). See [API keys for your integrations](/docs/guide/security#api-keys-for-your-integrations).</Step>
+  <Step>The secret is shown **once**. Moonbase stores only a SHA-256 hash and the first 10 characters (`prefix`) to tell keys apart.</Step>
+  <Step>Send it as a bearer token, with no `Token` header.</Step>
+</Steps>
+
+```bash
+curl "https://your-moonbase-host/api/v2/admin/licenses?status=unused" \
+  -H "Authorization: Bearer mbk_3q2X…"
+```
+
+### Areas
+
+A key can call the admin endpoints of the areas it was given, and nothing else:
+
+| Area | Covers |
+| --- | --- |
+| `products` | Products, releases, reviews |
+| `licenses` | License keys and grants |
+| `files` | Product files |
+| `orders` | Orders, invoices, subscriptions, analytics, store stats |
+| `marketing` | Discount codes, gift cards, creators, resellers |
+| `support` | Support tickets |
+| `users` | Accounts, bindings and devices, bans, store credit |
+| `security` | IP and device blacklist |
+| `logs` | Request logs and the activity log |
+
+The full endpoint list per area is in the [OpenAPI description](/docs/api/admin-api#openapi). A key acts as the owner who created it, limited to its areas; the owner's account must still be an admin and not banned, or the key stops working.
+
+### What API keys cannot do
+
+| Attempt | Result |
+| --- | --- |
+| An admin endpoint of an area the key was not given | `403 INSUFFICIENT_PERMISSIONS` |
+| Customer routes (`/api/v2/account`, `/api/v2/client/license`…), any v1 route, the reseller API | `403 API_KEY_NOT_ALLOWED` |
+| Owner-only routes: store settings, API keys, webhooks | `403 API_KEY_NOT_ALLOWED` |
+| Changing an account's role or an admin's areas, even with `users` | `403 API_KEY_NOT_ALLOWED` |
+| Revoked, expired or unknown key, or its owner lost admin rights | `401 INVALID_API_KEY` |
+| Request from a blacklisted IP | `403 BLACKLISTED` |
+
+Actions taken with a key appear in Dashboard → Activity with source `api` and the key's name. A store can have at most 50 active keys (`409 API_KEY_LIMIT`). Expired keys stay listed until revoked.
+
+### Managing keys over the API
+
+Key management needs an **owner session** (app key + `Token`); keys cannot create or list keys.
+
+| Method | Path | Body / result |
+| --- | --- | --- |
+| `GET` | `/api/v2/admin/api-keys` | Active keys: `id`, `name`, `prefix`, `permissions`, `createdAt`, `createdBy`, `lastUsedAt`, `expiresAt` |
+| `POST` | `/api/v2/admin/api-keys` | `{ name, permissions, expiresInDays }` → `201`, the same fields plus `secret` |
+| `DELETE` | `/api/v2/admin/api-keys/:id` | `{ revoked: true }` |
+
+<TypeTable
+  type={{
+    name: { type: 'string', description: '1–60 characters.', required: true },
+    permissions: { type: 'string[]', description: 'At least one area from the table above. Duplicates are removed.', required: true },
+    expiresInDays: { type: '30 | 90 | 365 | null', description: 'Lifetime in days; null never expires.', default: 'null' },
+  }}
+/>
+
+`lastUsedAt` is updated at most every 5 minutes.
+
+## Reseller API keys (`mbr_`)
+
+Resellers create up to 5 keys on their Wholesale page. They work only on `/api/v2/reseller/*` (except managing reseller keys themselves) and stop working when they are revoked, when the reseller is paused or removed, or when the account is banned. Store API keys (`mbk_`) are refused there with `API_KEY_NOT_ALLOWED`, and reseller keys are refused everywhere else. See [Reseller API](/docs/api/resellers).
+
+## Rate limits
+
+Limits are counted per client IP address (or per account where stated) over a rolling window, in the memory of the API process. Rejections answer `429` with the code below, a `Retry-After` header in seconds, and the IETF draft-8 `RateLimit` / `RateLimit-Policy` headers on limited routes.
+
+| Limit | Applies to | Budget | Code |
+| --- | --- | --- | --- |
+| General | Most v1 routes; v2 `auth`, `account`, `client`, `admin/users`, tickets, reviews and checkout recovery | 300 requests / 15 min per IP | `TOO_MANY_REQUESTS` |
+| Failed credential checks | Sign-in (v1 `/auth/user`, v2 `/auth/login`, `/client/session`), sign-up, refresh, PIN, password and username changes | 20 **failed** requests / 15 min per IP | `TOO_MANY_ATTEMPTS` |
+| Failed sign-ins per account | v1 `/auth/user`, v2 `/auth/login`, `/client/session` (keyed by the `username`, `email` or `login` sent) | 20 failed / 15 min per account name | `TOO_MANY_ATTEMPTS` |
+| License key redemption | v1 `/user/license/activate`, v2 `/licenses/redeem` | 20 failed / 15 min per IP, and 20 failed / hour per account | `TOO_MANY_ATTEMPTS` |
+| Binding resets and device removals | v1 `/user/reset-binding`, v2 `/account/bindings/reset`, device removal | 5 requests / 15 min per IP | `TOO_MANY_ATTEMPTS` |
+| Password reset emails | v2 `/auth/password/forgot` | 10 / 15 min per IP, and 3 / hour per email | `TOO_MANY_ATTEMPTS` |
+| Discount and gift card codes | Coupon previews, checkout with a code, store credit redemption | 20 failed / 15 min per IP | `TOO_MANY_ATTEMPTS` |
+| Guest checkout | `/api/purchase/guest/checkout` | 10 / 15 min per IP | `TOO_MANY_ATTEMPTS` |
+| Adding teammates | v2 team members | 20 / hour per account | `TOO_MANY_ATTEMPTS` |
+
+"Failed" limits only count responses with status 400 or higher, so legitimate sign-ins and redemptions are never slowed down. Self-service binding resets and device removals also have a cooldown set by the store, which fails with `429 RESET_COOLDOWN_ACTIVE` and a `retryAt` in `details`.
+
+<Callout type="info" title="Behind a reverse proxy">
+  Per-IP limits, the IP blacklist and account IP limits use the client address the API resolves. If Nginx, Caddy or Cloudflare sits in front of the API, the store owner must set `TRUST_PROXY_HOPS`; otherwise every client shares the proxy's address and its budget. See [Real visitor IP addresses](/docs/guide/operations#real-visitor-ip-addresses).
+</Callout>

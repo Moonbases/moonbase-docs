@@ -1,0 +1,358 @@
+---
+title: Client API and license tokens
+description: Device sign-in, Ed25519-signed license tokens, renewal, device modes, seats and floating leases for loaders and apps.
+---
+
+The client API is what loaders, launchers and apps use to find out what a customer may run on this device. A sign-in returns a **license token**: a compact JWS signed with the store's Ed25519 key. Your software verifies it against the public key built into it, so a fake server cannot answer "licensed", an edited token fails, and a saved token keeps working offline until it expires.
+
+<Callout type="info" title="Prefer an SDK">
+  The [SDKs](/docs/api/sdks) for Node.js, Python, C#, C++ and Lua implement everything on this page: nonces, verification, renewal, heartbeats and lease release. Use this page when you write your own client or need to know what the SDK does.
+</Callout>
+
+## Endpoints
+
+| Method | Path | Credentials | Purpose |
+| --- | --- | --- | --- |
+| `GET` | `/api/v2/client/public-key` | None | The key that verifies license tokens |
+| `POST` | `/api/v2/client/session` | None | Sign in, bind the device, get a session and a license token |
+| `POST` | `/api/v2/client/license` | `Authorization: <public app key>`, `Token: <session token>` | Fresh license token and extended session; floating check-in |
+| `POST` | `/api/v2/client/release` | `Authorization: <public app key>`, `Token: <session token>` | Give a floating lease back |
+
+All four share the general per-IP budget (300 requests / 15 min); sign-in also has the failed-attempt limits. See [Rate limits](/docs/api/authentication#rate-limits).
+
+## Flow
+
+<Steps>
+  <Step>At build time, copy the public key from **Dashboard → Developers** (or `GET /api/v2/client/public-key`) into your software. Pin it; never fetch it at run time.</Step>
+  <Step>Generate a hardware ID and a random nonce, then `POST /api/v2/client/session` with the customer's login and password.</Step>
+  <Step>Verify the returned `licenseToken` offline: signature, audience, expiry, issue time, hardware ID and nonce. Only then trust its `entitlements`.</Step>
+  <Step>Save the token to start offline later, and keep the `sessionToken`.</Step>
+  <Step>Before the token expires (and at least once a day), `POST /api/v2/client/license` with a new nonce. Store the new `sessionToken` it returns.</Step>
+  <Step>For floating products, keep checking in while the software runs, and `POST /api/v2/client/release` on exit.</Step>
+</Steps>
+
+## Public key
+
+```bash
+curl https://your-moonbase-host/api/v2/client/public-key
+```
+
+```json
+{
+  "ok": true,
+  "data": {
+    "kid": "3f9c1a7be2d04c55",
+    "alg": "EdDSA",
+    "crv": "Ed25519",
+    "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA…\n-----END PUBLIC KEY-----\n",
+    "jwk": { "kty": "OKP", "crv": "Ed25519", "x": "…", "kid": "3f9c1a7be2d04c55", "alg": "EdDSA", "use": "sig" },
+    "createdAt": "2026-10-01T09:12:44.512Z"
+  }
+}
+```
+
+The key pair is created the first time it is needed and stored in the database, with the private half encrypted by the API's `ENCRYPT_KEY`. `kid` is the first 16 hex characters of the SHA-256 of the key (SPKI DER) and appears in every token header. The response may be cached for an hour.
+
+<Callout type="warning" title="Back up the signing key">
+  If the database is lost, or restored without its original `ENCRYPT_KEY`, a new key pair is created and every build that embeds the old public key rejects the new tokens. Ship an update with the new key in that case.
+</Callout>
+
+## Signing in
+
+`POST /api/v2/client/session`, no headers besides `Content-Type: application/json`.
+
+<TypeTable
+  type={{
+    login: { type: 'string', description: 'Username, or email (any value containing @ is looked up as an email). 1–254 characters.', required: true },
+    password: { type: 'string', description: '1–1024 characters.', required: true },
+    hwid: { type: 'string', description: 'Hardware ID of this device, trimmed, 1–4096 characters. Send a stable hash, not raw serial numbers.', required: true },
+    nonce: { type: 'string', description: '8–128 characters from A–Z, a–z, 0–9, - and _. Random per request; echoed in the token so an old answer cannot be replayed.', required: false },
+    productId: { type: 'string', description: 'The product this software is (24 hex characters). Needed for products with their own or floating devices; ignored for account-device products.', required: false },
+  }}
+/>
+
+<Tabs items={['Request', 'Response']} defaultIndex={0}>
+  <Tab>
+```bash
+curl -X POST "https://your-moonbase-host/api/v2/client/session" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "login": "alice",
+    "password": "Correct-Horse-9-Battery",
+    "hwid": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+    "nonce": "Xk2v9q0Lr3TzW1bY8eNfQaHs"
+  }'
+```
+  </Tab>
+  <Tab>
+```json
+{
+  "ok": true,
+  "data": {
+    "sessionToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9…",
+    "sessionExpiresIn": "1d",
+    "licenseToken": "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCIsImtpZCI6IjNmOWMxYTdiZTJkMDRjNTUifQ.eyJpc3Mi….c2lnbmF0dXJl",
+    "claims": { "…": "the decoded token payload, see below" }
+  }
+}
+```
+  </Tab>
+</Tabs>
+
+What the server does:
+
+1. Checks the password. Unknown accounts and wrong passwords both answer `401 INVALID_CREDENTIALS`.
+2. Records the request IP against the account's IP limit and, unless `productId` names a product with its own or floating devices, binds `hwid` to the account within its device limit (see [Device modes](#device-modes)).
+3. For a product with its own or floating devices, takes or refreshes one of that product's places for this device.
+4. Signs a license token listing what the account may use **on this device, right now**.
+
+`claims` in the response is the same payload as inside `licenseToken`, for convenience. Never trust it without verifying the token.
+
+## Renewing the license
+
+`POST /api/v2/client/license` with the public app key and the session token. Call it before the license token expires; it is also the floating-license check-in.
+
+<TypeTable
+  type={{
+    hwid: { type: 'string', description: 'Same hardware ID as at sign-in, 1–4096 characters.', required: true },
+    nonce: { type: 'string', description: 'A new random nonce for this request.', required: false },
+    productId: { type: 'string', description: 'Required to check in and extend a floating lease, or to keep a place of a product with its own devices.', required: false },
+  }}
+/>
+
+```bash
+curl -X POST "https://your-moonbase-host/api/v2/client/license" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: <PUBLIC_API_KEY>" \
+  -H "Token: <sessionToken>" \
+  -d '{ "hwid": "9f86d081…", "nonce": "q7ZpR1mWc8Lx0VbN" }'
+```
+
+The response has `licenseToken`, `claims`, and an **extended session**: `sessionToken` (valid one day from now) and `sessionExpiresIn` (`"1d"`). Use the new session token from then on. Software that renews at least once a day therefore never needs the password again; a session that already expired cannot be extended (`401 INVALID_TOKEN`), and a password change (`401 TOKEN_REVOKED`), ban (`403 BANNED`) or deleted account (`401 INVALID_USER`) ends it on the next renewal. Products that were revoked or ran out drop out of the next token.
+
+Device checks run again on every renewal: a device that is no longer within the account's limit gets `401 HWID_LIMIT_EXCEEDED`.
+
+## Releasing a floating lease
+
+`POST /api/v2/client/release` with the same headers and `{ "hwid": "…", "productId": "…" }` (both required). Answers `{ "released": true }` when this device held a lease on that product, `false` otherwise. The place is free for another device at once. Call it when the software exits cleanly; a crashed client's lease simply runs out.
+
+## License token format
+
+A license token is a compact JWS (`header.payload.signature`, base64url without padding). Any JWT library that supports EdDSA / Ed25519 can verify it.
+
+```json title="Header"
+{ "alg": "EdDSA", "typ": "JWT", "kid": "3f9c1a7be2d04c55" }
+```
+
+<TypeTable
+  type={{
+    iss: { type: 'string', description: 'The API URL (the URL setting of the API).', required: true },
+    aud: { type: '"moonbase:license"', description: 'Always this value. Reject tokens with any other audience.', required: true },
+    sub: { type: 'string', description: 'Account ID.', required: true },
+    iat: { type: 'number', description: 'Issued at, seconds since the epoch (server clock).', required: true },
+    exp: { type: 'number', description: 'Expires at, seconds since the epoch. iat plus the store offline window (Store settings → Security, 1–720 hours, 24 by default).', required: true },
+    jti: { type: 'string', description: 'Random UUID of this token.', required: true },
+    username: { type: 'string', description: 'Account username.', required: true },
+    hwid: { type: 'string', description: 'Hardware ID the token was issued for.', required: true },
+    nonce: { type: 'string', description: 'The nonce from the request, when one was sent.', required: false },
+    entitlements: { type: 'Entitlement[]', description: 'Products this account may use on this device now.', required: true },
+    capabilities: { type: 'string[]', description: 'Every feature key from all listed products, sorted, without duplicates.', required: true },
+  }}
+/>
+
+Each entitlement:
+
+<TypeTable
+  type={{
+    productId: { type: 'string', description: 'Product ID.', required: true },
+    productName: { type: 'string', description: 'Product name.', required: true },
+    expiresAt: { type: 'string | null', description: 'ISO date when access to this product ends; null for lifetime.', required: true },
+    seats: { type: 'number', description: 'Seats owned, for products sold per seat. Enforce it yourself if your software counts users.', required: false },
+    capabilities: { type: 'string[]', description: 'Feature keys this product grants (lowercase, set per product in the dashboard).', required: false },
+    leaseExpiresAt: { type: 'string', description: 'Floating products only: when this device\'s lease ends unless it checks in. After it, treat the product as not licensed even if the token is still valid.', required: false },
+  }}
+/>
+
+```json title="Example payload"
+{
+  "iss": "https://api.example.com",
+  "aud": "moonbase:license",
+  "sub": "665f1c2e9b1d4a0012ab34cd",
+  "iat": 1761472800,
+  "exp": 1761559200,
+  "jti": "1b4e28ba-2fa1-4d3b-a3f5-ef19b5a7633b",
+  "username": "alice",
+  "hwid": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+  "nonce": "Xk2v9q0Lr3TzW1bY8eNfQaHs",
+  "entitlements": [
+    { "productId": "665f1c2e9b1d4a0012ab0001", "productName": "Pro Edition", "expiresAt": null, "capabilities": ["export", "maps.premium"] },
+    { "productId": "665f1c2e9b1d4a0012ab0002", "productName": "Team Suite", "expiresAt": "2026-11-26T10:00:00.000Z", "seats": 3 },
+    { "productId": "665f1c2e9b1d4a0012ab0003", "productName": "Render Node", "expiresAt": null, "leaseExpiresAt": "2026-10-26T10:15:00.000Z" }
+  ],
+  "capabilities": ["export", "maps.premium"]
+}
+```
+
+The token's own `exp` is the offline window. Each product has its own expiry on top: a monthly plan can end before the token does, so check `expiresAt` (and `leaseExpiresAt`) whenever you decide whether a product is usable, not only when you receive the token.
+
+## Verifying tokens offline
+
+Check, in this order: the header's `alg` is `EdDSA`; the Ed25519 signature over the bytes `header.payload` is valid for your pinned key; `aud` is `moonbase:license`; `exp` has not passed; `iat` is not in the future; `hwid` is this device; and `nonce` is the one you sent (for a fresh answer). Allow a clock tolerance: the SDKs use 60 seconds.
+
+<CodeBlockTabs defaultValue="node">
+  <CodeBlockTabsList>
+    <CodeBlockTabsTrigger value="node">Node.js</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="python">Python</CodeBlockTabsTrigger>
+  </CodeBlockTabsList>
+  <CodeBlockTab value="node">
+```javascript
+import crypto from "node:crypto";
+
+const PUBLIC_KEY = crypto.createPublicKey(`-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEA…
+-----END PUBLIC KEY-----`);
+const TOLERANCE = 60; // seconds
+
+export function verifyLicenseToken(token, { hwid, nonce }) {
+  const parts = token.split(".");
+  if (parts.length !== 3) throw new Error("INVALID_TOKEN");
+  const [header, payload, signature] = parts;
+  if (JSON.parse(Buffer.from(header, "base64url")).alg !== "EdDSA") throw new Error("INVALID_TOKEN");
+
+  // Check the signature before reading anything else.
+  const valid = crypto.verify(null, Buffer.from(`${header}.${payload}`), PUBLIC_KEY, Buffer.from(signature, "base64url"));
+  if (!valid) throw new Error("INVALID_SIGNATURE");
+
+  const claims = JSON.parse(Buffer.from(payload, "base64url"));
+  const now = Date.now() / 1000;
+  if (claims.aud !== "moonbase:license") throw new Error("INVALID_TOKEN");
+  if (claims.exp + TOLERANCE < now) throw new Error("TOKEN_EXPIRED");
+  if (claims.iat - TOLERANCE > now) throw new Error("TOKEN_NOT_YET_VALID");
+  if (claims.hwid !== hwid) throw new Error("WRONG_DEVICE");
+  if (nonce !== undefined && claims.nonce !== nonce) throw new Error("NONCE_MISMATCH");
+  return claims;
+}
+
+export function hasProduct(claims, productId, now = Date.now()) {
+  const entry = claims.entitlements.find((item) => item.productId === productId);
+  if (!entry) return false;
+  const at = now - TOLERANCE * 1000;
+  if (entry.expiresAt !== null && Date.parse(entry.expiresAt) <= at) return false;
+  if (entry.leaseExpiresAt !== undefined && Date.parse(entry.leaseExpiresAt) <= at) return false;
+  return true;
+}
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="python">
+```python
+import base64
+import json
+import time
+from typing import Optional
+
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.serialization import load_pem_public_key
+
+PUBLIC_KEY = load_pem_public_key(b"""-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEA...
+-----END PUBLIC KEY-----""")
+TOLERANCE = 60  # seconds
+
+
+def b64url(value: str) -> bytes:
+    return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
+
+
+def verify_license_token(token: str, hwid: str, nonce: Optional[str] = None) -> dict:
+    parts = token.split(".")
+    if len(parts) != 3:
+        raise ValueError("INVALID_TOKEN")
+    header, payload, signature = parts
+    if json.loads(b64url(header)).get("alg") != "EdDSA":
+        raise ValueError("INVALID_TOKEN")
+    try:
+        PUBLIC_KEY.verify(b64url(signature), f"{header}.{payload}".encode())
+    except InvalidSignature:
+        raise ValueError("INVALID_SIGNATURE")
+
+    claims = json.loads(b64url(payload))
+    now = time.time()
+    if claims.get("aud") != "moonbase:license":
+        raise ValueError("INVALID_TOKEN")
+    if claims["exp"] + TOLERANCE < now:
+        raise ValueError("TOKEN_EXPIRED")
+    if claims["iat"] - TOLERANCE > now:
+        raise ValueError("TOKEN_NOT_YET_VALID")
+    if claims["hwid"] != hwid:
+        raise ValueError("WRONG_DEVICE")
+    if nonce is not None and claims.get("nonce") != nonce:
+        raise ValueError("NONCE_MISMATCH")
+    return claims
+```
+  </CodeBlockTab>
+</CodeBlockTabs>
+
+<Callout type="warn" title="What signed tokens do not stop">
+  Signatures stop fake servers, edited answers and tokens copied from another device. They cannot stop someone patching the check out of your binary: obfuscate your loader.
+</Callout>
+
+### Clock tolerance
+
+`iat` and `exp` come from the server's clock. The tolerance is how far the device clock may differ from it, and it applies to the token's `exp`, to each product's `expiresAt` and to `leaseExpiresAt`. Checking `iat` matters: without it, a device clock set back before the token was issued would keep an old token valid for good. The SDKs refuse such a token with `TOKEN_NOT_YET_VALID`.
+
+## Device modes
+
+Each product counts devices in one of three ways (product form → "How devices are counted", `deviceMode` in the admin API):
+
+| Mode | `deviceMode` | What a sign-in does | Limit | When full |
+| --- | --- | --- | --- | --- |
+| Account devices (default) | `account` | Binds `hwid` to the account | Store default (Store settings → Security, 2 by default), raised by any owned product that allows more | `401 HWID_LIMIT_EXCEEDED` |
+| Its own devices | `product` | With `productId`: the device takes one of the product's own places, separate from the account's devices | The product's `maxDevices`, or the store default | `401 DEVICE_LIMIT_EXCEEDED` |
+| Floating | `floating` | With `productId`: the device holds a lease on one of the product's places | `maxDevices` devices **at a time** | `409 FLOATING_LIMIT_REACHED` |
+
+- The token lists a `product` or `floating` product only on a device that holds one of its places. A client that never sends `productId` binds to the account instead and does not get those products.
+- Signing in with `productId` of such a product does not bind the device to the account. The token then lists account-device products only if this device is already one of the account's devices within its limit.
+- An unknown `productId` fails with `404 INVALID_PRODUCT`. A `productId` the account does not own takes no place; the token simply does not list it.
+- When an account's device limit drops (seats lapse, a product that allowed more ends), the devices bound most recently past the limit stop getting access (`HWID_LIMIT_EXCEEDED`) until the customer removes a device; the oldest keep working.
+- Customers free places from their account page; admins from the user page or `DELETE /api/v2/admin/users/:id/products/:productId/devices/:deviceId`.
+
+### Seats
+
+Products sold per seat list `seats` in their entitlement. Each seat allows the product's device limit (or the store default): `maxDevices × seats` places for `product` and `floating` modes, and a raised account limit for `account` mode. If your software counts concurrent users itself, enforce `seats` in your code.
+
+### Floating leases
+
+- A lease lasts the store's floating lease length (Store settings → Security, 2–1440 minutes, 15 by default). `leaseExpiresAt` in the entitlement tells you when this device's lease ends.
+- Renewing with `productId` is the check-in that extends the lease. Between check-ins, the SDK heartbeat waits a third of the time left on the lease (but at least 30 seconds), or 10 minutes when the product has no lease.
+- When every place is taken, sign-in and check-in fail with `409 FLOATING_LIMIT_REACHED` and `details: { limit, retryAt }`, where `retryAt` is when the next lease ends (or `null`).
+- A device that stops checking in loses its place when the lease ends; another device can take it, and the late device's next check-in gets `FLOATING_LIMIT_REACHED`. Stop using the product then.
+
+## Errors
+
+| Status | Code | When |
+| --- | --- | --- |
+| 400 | `FAILED_AUTHENTICATION` | `/license` or `/release` without `Authorization` or `Token` |
+| 401 | `AUTHENTICATION_FAILED` | Wrong app key |
+| 401 | `INVALID_CREDENTIALS` | Unknown account or wrong password |
+| 401 | `INVALID_TOKEN` | Session token expired or invalid: sign in again |
+| 401 | `TOKEN_REVOKED` | Password changed since the session started |
+| 401 | `INVALID_USER` | Account deleted |
+| 401 | `HWID_LIMIT_EXCEEDED` | Account device limit reached, or this device is past it (`details.limit`) |
+| 401 | `IP_LIMIT_EXCEEDED` | Account IP limit reached |
+| 401 | `DEVICE_LIMIT_EXCEEDED` | Every place of a product with its own devices is taken (`details.limit`) |
+| 403 | `BANNED` | Account banned (`details.reason`, `details.date`) |
+| 403 | `BLACKLISTED` | IP address or hardware ID is blocked |
+| 403 | `API_KEY_NOT_ALLOWED` | An `mbk_`/`mbr_` key was sent instead of an app key |
+| 404 | `INVALID_PRODUCT` | `productId` is not a product |
+| 409 | `FLOATING_LIMIT_REACHED` | Every floating place is in use (`details.limit`, `details.retryAt`) |
+| 409 | `SIGN_IN_CONFLICT` | Too many simultaneous sign-ins changed the account at once; retry |
+| 422 | `VALIDATION_FAILED` | Invalid body; `details` lists each field |
+| 429 | `TOO_MANY_ATTEMPTS`, `TOO_MANY_REQUESTS` | Rate limited |
+
+The SDKs add their own codes for verification and connection failures, and map ended sessions to `SESSION_EXPIRED`. See [SDKs](/docs/api/sdks#errors).
+
+## Moving a 1.8 loader to the client API
+
+- Accounts, passwords and bound devices are shared with the v1 API. Keep sending the **same hardware ID** your 1.8 loader sent (up to 4096 characters), or every customer's device counts as a new one.
+- v1 sign-in (`POST /api/auth/user`) only knows account devices: it never sends a product ID, so per-product and floating limits don't apply to it. Use the client API with `productId` to use those modes.
+- v1 has no signed answer. Anything a v1 loader reads from `/api/user/info` can be faked by a proxy; license tokens cannot.

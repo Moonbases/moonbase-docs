@@ -1,0 +1,308 @@
+---
+title: Client SDKs
+description: Node.js, Python, C#, C++ and Lua libraries that sign customers in and verify license tokens offline.
+---
+
+Moonbase ships five small client libraries in the `sdks` folder of the release package. Each one implements the [client API](/docs/api/client-api) the same way:
+
+1. **Signs a user in** with username (or email) and password and binds the device within the store's limits.
+2. **Returns a verified license**: the Ed25519-signed token, checked against the public key pinned in your build. Check products with `has(productId)` and feature keys with `can("export")`.
+3. **Verifies saved tokens offline**: signature, expiry, issue time, device and nonce.
+4. **Renews** without the password. Every renewal extends the session by a day, so software that keeps running stays signed in.
+5. **Holds floating licenses**: with `productId` set, a heartbeat keeps the lease and `release` frees it on exit.
+
+| Language | Folder | Requirements |
+| --- | --- | --- |
+| Node.js / TypeScript | `sdks/node` | Node 18+, no dependencies |
+| Python | `sdks/python` | Python 3.9+, `cryptography` |
+| C# / .NET | `sdks/dotnet` | .NET Standard 2.0 (.NET Framework 4.6.1+, .NET 6+) and .NET 8, BouncyCastle |
+| C++ | `sdks/cpp` | C++17 and CMake; WinHTTP on Windows (no other dependencies), libcurl elsewhere |
+| Lua / FiveM | `sdks/lua` | Lua 5.4, one file, pure Lua |
+
+## What you need
+
+| Option | Where to find it | Needed for |
+| --- | --- | --- |
+| Base URL | Your API URL, e.g. `https://api.example.com` | Everything |
+| Public key (PEM) | **Dashboard → Developers** | Verifying tokens. Pin it in your build |
+| App key | `PUBLIC_API_KEY` from the app's `.env` (not shown in the dashboard) | `renew`, heartbeat and `release` |
+| Product ID | The product's ID | Products with their own devices or floating licenses |
+
+Dashboard → Developers also shows each SDK's snippet with your URL and key filled in.
+
+## Sign in and check a product
+
+<Tabs items={['Node.js', 'Python', 'C#', 'C++', 'Lua (FiveM)']} defaultIndex={0}>
+  <Tab>
+```bash
+cd sdks/node && npm run build   # outputs dist/ (ESM + types)
+```
+
+```ts
+import { hashHardwareId, MoonbaseClient, MoonbaseError } from "@moonbase/client";
+
+const client = new MoonbaseClient({ baseUrl: "https://api.example.com", publicKey: PUBLIC_KEY_PEM, appKey: APP_KEY });
+const hwid = hashHardwareId(machineGuid);
+
+try {
+  const license = await client.signIn(username, password, hwid);
+  if (license.has(PRODUCT_ID)) console.log("Licensed", license.entitlement(PRODUCT_ID));
+} catch (error) {
+  if (error instanceof MoonbaseError) console.error("Sign-in failed:", error.code);
+}
+
+// Offline later: a saved token is checked without the network.
+const license = client.verify(savedToken, { hwid });
+// Renew for the same session (needs appKey). This also extends the session by a day:
+await client.renew(hwid);
+saveToDisk(client.session); // save the new session; restore it with client.useSession(saved)
+```
+
+Clock tolerance option: `clockToleranceSeconds` (default 60).
+  </Tab>
+  <Tab>
+```bash
+pip install ./sdks/python   # or copy the moonbase_client folder; needs `cryptography`
+```
+
+```python
+from moonbase_client import MoonbaseClient, MoonbaseError, hash_hardware_id
+
+client = MoonbaseClient("https://api.example.com", public_key=PUBLIC_KEY_PEM, app_key=APP_KEY)
+hwid = hash_hardware_id(machine_guid)
+try:
+    license = client.sign_in(username, password, hwid)
+except MoonbaseError as error:
+    sys.exit(f"Sign-in failed: {error.code}")
+
+if license.has(PRODUCT_ID):
+    print("Licensed until", license.entitlement(PRODUCT_ID)["expiresAt"] or "forever")
+
+# Offline later: a saved token is checked without the network.
+license = client.verify(saved_token, hwid)
+# Renew for the same session (needs app_key). This also extends the session by a day:
+license = client.renew(hwid)
+save(client.session)  # save the new session; restore it with client.session = saved
+```
+
+Clock tolerance option: `clock_tolerance` (seconds, default 60).
+  </Tab>
+  <Tab>
+```bash
+dotnet add reference sdks/dotnet/Moonbase.Client/Moonbase.Client.csproj
+# or: dotnet pack sdks/dotnet/Moonbase.Client -c Release
+```
+
+```csharp
+using Moonbase.Client;
+
+using var client = new MoonbaseClient("https://api.example.com", PublicKeyPem, AppKey);
+var hwid = MoonbaseClient.HashHardwareId(machineGuid);
+
+try
+{
+    var license = await client.SignInAsync(username, password, hwid);
+    if (!license.Has(ProductId)) return;
+    File.WriteAllText("license.token", license.Token);
+}
+catch (MoonbaseException error)
+{
+    Console.WriteLine($"Sign-in failed: {error.Code}");
+}
+
+// Offline later: a saved token is checked without the network.
+var saved = client.Verify(File.ReadAllText("license.token"), hwid);
+// Renew for the same session (needs the app key). This also extends the session by a day:
+var renewed = await client.RenewAsync(hwid);
+File.WriteAllText("session.token", client.Session); // restore it by setting client.Session
+```
+
+Clock tolerance option: `clockTolerance` (a `TimeSpan`, default 60 seconds). Damaged saved tokens throw `INVALID_TOKEN`, never a raw .NET exception.
+  </Tab>
+  <Tab>
+```bash
+cmake -S sdks/cpp -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
+```
+
+```cmake
+add_subdirectory(moonbase-cpp)            # the sdks/cpp folder
+target_link_libraries(loader PRIVATE moonbase::client)
+```
+
+```cpp
+#include <moonbase/moonbase.hpp>
+
+moonbase::ClientOptions options;
+options.baseUrl = "https://api.example.com";
+options.publicKeyPem = PUBLIC_KEY_PEM;  // Dashboard -> Developers; pin it in your build
+options.appKey = APP_KEY;               // needed to renew without the password
+moonbase::Client client(options);
+const std::string hwid = moonbase::hashHardwareId({machineGuid, volumeSerial});
+
+try {
+  auto license = client.signIn(username, password, hwid);
+  if (!license.has(PRODUCT_ID)) return showStorePage();
+  if (license.can("export")) enableExport();
+  saveToDisk(license.token);  // later, offline: client.verify(token, hwid)
+} catch (const moonbase::Error& error) {
+  // error.code(): INVALID_CREDENTIALS, HWID_LIMIT_EXCEEDED, BANNED, INVALID_SIGNATURE, NETWORK_ERROR...
+}
+
+// Later, for the same session (needs the app key). This also extends the session by a day:
+client.renew(hwid);
+saveToDisk(client.session());  // restore it with client.useSession(saved)
+```
+
+Linux and macOS need libcurl's development package. To use your own HTTP stack, implement `moonbase::Transport` and pass it in `ClientOptions::transport`. Clock tolerance option: `options.clockToleranceSeconds` (default 60).
+  </Tab>
+  <Tab>
+```lua
+-- fxmanifest.lua
+fx_version "cerulean"
+game "gta5"
+lua54 "yes"
+server_scripts { "moonbase.lua", "server.lua" }
+```
+
+```lua
+-- server.lua
+local PRODUCT_ID = "665f1c2e9b1d4a0012ab34cd"
+local client = Moonbase.new({
+  baseUrl = "https://api.example.com",
+  publicKey = [[-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEA...
+-----END PUBLIC KEY-----]],              -- Dashboard -> Developers; pin it in the resource
+  appKey = "your-public-app-key",        -- needed to renew without the password
+})
+
+CreateThread(function()
+  -- The server is the "device": hash something stable about it, never send it raw.
+  local hwid = Moonbase.hashHardwareId(GetConvar("sv_licenseKey", ""), GetCurrentResourceName())
+  local license, err = client:signIn(GetConvar("moonbase_user", ""), GetConvar("moonbase_password", ""), hwid)
+  if not license or not license:has(PRODUCT_ID) then
+    print(("Not licensed (%s)"):format(err and err.code or "product not owned"))
+    return
+  end
+  StartMyResource(license:can("premium"))
+end)
+```
+
+Without a callback, calls wait inside the thread and return `result, err`; pass a callback `function(err, result)` to continue without waiting. Errors are tables `{ code, message, status }`. Outside FiveM, pass your own `http` transport to `Moonbase.new`. The pure-Lua signature check takes about 0.1 s, so run sign-ins and renewals from a thread. Clock tolerance option: `clockTolerance` (seconds, default 60).
+  </Tab>
+</Tabs>
+
+## Floating licenses and products with their own devices
+
+Set the product ID on the client. The device then takes one of the product's places instead of an account device. For floating licenses, start a heartbeat to keep the lease while the software runs and release it on exit.
+
+<Tabs items={['Node.js', 'Python', 'C#', 'C++', 'Lua (FiveM)']} defaultIndex={0}>
+  <Tab>
+```ts
+const client = new MoonbaseClient({ baseUrl, publicKey: PUBLIC_KEY_PEM, appKey: APP_KEY, productId: PRODUCT_ID });
+const license = await client.signIn(username, password, hwid); // FLOATING_LIMIT_REACHED when every place is taken
+const heartbeat = client.startHeartbeat(hwid, {
+  onError: (error) => ["FLOATING_LIMIT_REACHED", "SESSION_EXPIRED"].includes(error.code) && quit(),
+});
+// on exit:
+heartbeat.stop();
+await client.release(hwid);
+```
+  </Tab>
+  <Tab>
+```python
+client = MoonbaseClient(API_URL, public_key=PUBLIC_KEY_PEM, app_key=APP_KEY, product_id=PRODUCT_ID)
+license = client.sign_in(username, password, hwid)  # FLOATING_LIMIT_REACHED when every place is taken
+heartbeat = client.start_heartbeat(hwid, on_error=lambda error: error.code in ("FLOATING_LIMIT_REACHED", "SESSION_EXPIRED") and quit())
+# on exit:
+heartbeat.stop()
+client.release(hwid)
+```
+  </Tab>
+  <Tab>
+```csharp
+using var client = new MoonbaseClient(ApiUrl, PublicKeyPem, AppKey, productId: ProductId);
+var license = await client.SignInAsync(username, password, hwid); // FLOATING_LIMIT_REACHED when every place is taken
+using var heartbeat = client.StartHeartbeat(hwid, onError: error => { if (error.Code is "FLOATING_LIMIT_REACHED" or "SESSION_EXPIRED") Quit(); });
+// on exit:
+await client.ReleaseAsync(hwid);
+```
+  </Tab>
+  <Tab>
+```cpp
+options.productId = PRODUCT_ID;
+moonbase::Client client(options);
+auto license = client.signIn(username, password, hwid);  // FLOATING_LIMIT_REACHED when every place is taken
+
+auto heartbeat = client.startHeartbeat(hwid,
+    [](const moonbase::License& fresh) { /* refresh what the app shows */ },
+    [](const moonbase::Error& error) {
+      if (error.code() == "FLOATING_LIMIT_REACHED") stopUsingTheProduct();  // another device took the place
+      if (error.code() == "SESSION_EXPIRED") askToSignInAgain();
+    });
+// ... on exit:
+heartbeat->stop();
+client.release(hwid);
+```
+  </Tab>
+  <Tab>
+```lua
+local client = Moonbase.new({ baseUrl = API, publicKey = KEY, appKey = APP_KEY, productId = PRODUCT_ID })
+local license, err = client:signIn(user, password, hwid)       -- FLOATING_LIMIT_REACHED when every place is taken
+local heartbeat = client:startHeartbeat(hwid, {
+  onError = function(e)
+    if e.code == "FLOATING_LIMIT_REACHED" or e.code == "SESSION_EXPIRED" then StopResource(GetCurrentResourceName()) end
+  end,
+})
+AddEventHandler("onResourceStop", function(name)
+  if name == GetCurrentResourceName() then heartbeat:stop(); client:release(hwid, function() end) end
+end)
+```
+
+`startHeartbeat` needs FiveM threads; elsewhere, call `client:renew(hwid)` on your own timer.
+  </Tab>
+</Tabs>
+
+The heartbeat waits a third of the time left on the lease between check-ins (at least 30 seconds), or 10 minutes without a lease; each SDK lets you override the interval. It never stops on its own: failed check-ins, and exceptions thrown by your callbacks, go to `onError`, and it tries again at the next beat. `has()` treats an ended lease as unlicensed even before the token expires.
+
+## Sessions
+
+A sign-in starts a session that lasts a day, and every renewal (and so every heartbeat) extends it by another day. Software that runs for weeks keeps its session, and so does a saved one (`session` / `useSession`) as long as it is used at least once a day. Renewing replaces the session token: save it again after renewing if you keep it.
+
+When the session has ended (a day without a renewal, a password change, or a deleted account), renewing fails with `SESSION_EXPIRED`: ask for the password and sign in again. A ban fails with `BANNED`. Revoked products drop out at the next renewal.
+
+<Callout type="info" title="Use the SDKs of your Moonbase version">
+  Build loaders with the SDKs shipped in your release package. The 2.0 SDKs keep the session alive through renewals and report `SESSION_EXPIRED` and `TOKEN_NOT_YET_VALID`.
+</Callout>
+
+## Errors
+
+Errors are thrown as `MoonbaseError` (Node, Python), `MoonbaseException` (C#), `moonbase::Error` (C++) or returned as `{ code, message, status }` tables (Lua), always with a stable `code`.
+
+| Code | Source | Meaning |
+| --- | --- | --- |
+| `INVALID_CREDENTIALS` | API | Unknown account or wrong password |
+| `HWID_LIMIT_EXCEEDED` | API | Account device limit reached, or this device is past a limit that dropped |
+| `IP_LIMIT_EXCEEDED` | API | Account IP limit reached |
+| `DEVICE_LIMIT_EXCEEDED` | API | Every place of a product with its own devices is taken |
+| `FLOATING_LIMIT_REACHED` | API | Every floating place is in use; at check-in: another device took this one's place |
+| `BANNED`, `BLACKLISTED` | API | Account banned; IP or device blocked |
+| `SESSION_EXPIRED` | SDK | The session ended (API `INVALID_TOKEN`, `TOKEN_REVOKED` or `INVALID_USER` on renew/release): sign in again |
+| `INVALID_SIGNATURE` | Verification | The token was not signed by the pinned key |
+| `TOKEN_EXPIRED` | Verification | The token is past `exp` (plus tolerance) |
+| `TOKEN_NOT_YET_VALID` | Verification | The token was issued after the device's current time: the clock is behind |
+| `WRONG_DEVICE` | Verification | The token belongs to another hardware ID |
+| `NONCE_MISMATCH` | Verification | The token does not answer this request |
+| `INVALID_TOKEN` | Verification | Malformed or damaged token, wrong algorithm or audience |
+| `NETWORK_ERROR` | SDK | The store could not be reached or the connection dropped |
+| `NOT_SIGNED_IN`, `NO_APP_KEY`, `NO_PRODUCT` | SDK | Renew/release called before sign-in, without `appKey`, or release without `productId` |
+| `INVALID_PUBLIC_KEY` | SDK | The pinned key is not an Ed25519 key |
+| `REQUEST_FAILED` | SDK | Any other failure without an API code, including exceptions inside heartbeat callbacks |
+
+Any other API code (for example `TOO_MANY_ATTEMPTS`) is passed through unchanged. See [Errors](/docs/api/errors).
+
+## Tips
+
+- **Hash the hardware ID** with the provided helper (`hashHardwareId` / `hash_hardware_id` / `HashHardwareId`: the SHA-256 hex of the parts you pass, joined with `|`); raw serial numbers never need to leave the machine. Moving a 1.8 loader to an SDK? Keep sending the hardware ID it sent before (up to 4096 characters), or customers' devices count as new ones.
+- **Keep the last token** to start offline. It is valid for the window set in Store settings → Security (24 hours by default), and `has()` still checks each product's own expiry.
+- **Obfuscate your loader.** Signed tokens stop fake servers and edited answers; they can't stop someone patching the check out of your binary.

@@ -1,0 +1,373 @@
+---
+title: User profile examples (v1)
+description: GET /api/user/info in twelve languages, with the public app key and the JWT.
+---
+
+<Callout type="info" title="Legacy API">
+  Send the public app key (`PUBLIC_API_KEY` from the app's `.env`) in `Authorization` and the JWT from [sign-in](/docs/api/v1/examples/authentication) in `Token`. Replace `https://your-moonbase-host` with your API URL.
+</Callout>
+
+Every example returns `status_data.user` and fails with `status_message` otherwise (`INVALID_TOKEN` means the JWT expired: sign in again). See [User profile](/docs/api/v1/user-info) for the fields.
+
+<CodeBlockTabs defaultValue="javascript">
+  <CodeBlockTabsList>
+    <CodeBlockTabsTrigger value="javascript">JavaScript</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="typescript">TypeScript</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="python">Python</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="java">Java</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="csharp">C#</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="cpp">C++</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="ruby">Ruby</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="go">Go</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="rust">Rust</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="php">PHP</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="swift">Swift</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="lua">Lua</CodeBlockTabsTrigger>
+  </CodeBlockTabsList>
+  <CodeBlockTab value="javascript">
+```javascript
+async function getUserInfo(appKey, jwt) {
+  const res = await fetch("https://your-moonbase-host/api/user/info", {
+    headers: { Authorization: appKey, Token: jwt, Accept: "application/json" },
+  });
+  const body = await res.json();
+  if (body.status_overview !== "success") throw new Error(body.status_message);
+  return body.status_data.user;
+}
+
+const user = await getUserInfo("<PUBLIC_API_KEY>", "<jwt_token>");
+console.log(user.username, user.products);
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="typescript">
+```typescript
+type V1Response<T> = {
+  status_message: string;
+  status_overview: "success" | "failed";
+  status_code: number;
+  status_data?: T;
+};
+
+type OwnedProduct = { product: string; productName: string; expiration_date: string; seats?: number };
+type V1User = { _id: string; username: string; email: string; flags: number; products: OwnedProduct[]; hwid: string[]; ip: string[] };
+
+export async function getUserInfo(appKey: string, jwt: string): Promise<V1User> {
+  const res = await fetch("https://your-moonbase-host/api/user/info", {
+    headers: { Authorization: appKey, Token: jwt, Accept: "application/json" },
+  });
+  const body = (await res.json()) as V1Response<{ user: V1User }>;
+  if (body.status_overview !== "success" || !body.status_data) {
+    throw new Error(`${body.status_code} ${body.status_message}`);
+  }
+  return body.status_data.user;
+}
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="python">
+```python
+import requests
+
+
+def get_user_info(app_key: str, jwt: str) -> dict:
+    body = requests.get(
+        "https://your-moonbase-host/api/user/info",
+        headers={"Authorization": app_key, "Token": jwt},
+        timeout=10,
+    ).json()
+    if body["status_overview"] != "success":
+        raise RuntimeError(f"{body['status_code']} {body['status_message']}")
+    return body["status_data"]["user"]
+
+
+user = get_user_info("<PUBLIC_API_KEY>", "<jwt_token>")
+print(user["username"], [entry["productName"] for entry in user["products"]])
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="java">
+```java
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+
+public class MoonbaseUserInfo {
+    private static final HttpClient CLIENT = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+    private static final ObjectMapper JSON = new ObjectMapper();
+
+    public static JsonNode getUserInfo(String appKey, String jwt) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://your-moonbase-host/api/user/info"))
+            .header("Authorization", appKey)
+            .header("Token", jwt)
+            .timeout(Duration.ofSeconds(30))
+            .GET()
+            .build();
+
+        JsonNode body = JSON.readTree(CLIENT.send(request, HttpResponse.BodyHandlers.ofString()).body());
+        if (!"success".equals(body.path("status_overview").asText())) {
+            throw new IllegalStateException(body.path("status_message").asText());
+        }
+        return body.path("status_data").path("user");
+    }
+}
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="csharp">
+```csharp
+using System;
+using System.Net.Http;
+using System.Text.Json;
+using System.Threading.Tasks;
+
+public static class MoonbaseUserInfo
+{
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
+
+    public static async Task<JsonElement> GetUserInfoAsync(string appKey, string jwt)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "https://your-moonbase-host/api/user/info");
+        request.Headers.TryAddWithoutValidation("Authorization", appKey);
+        request.Headers.Add("Token", jwt);
+
+        using var response = await Http.SendAsync(request);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = body.RootElement;
+        if (root.GetProperty("status_overview").GetString() != "success")
+            throw new InvalidOperationException(root.GetProperty("status_message").GetString());
+        return root.GetProperty("status_data").GetProperty("user").Clone();
+    }
+}
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="cpp">
+```cpp
+// libcurl + nlohmann/json
+#include <curl/curl.h>
+#include <nlohmann/json.hpp>
+#include <stdexcept>
+#include <string>
+
+static size_t collect(char* data, size_t size, size_t count, void* out) {
+  static_cast<std::string*>(out)->append(data, size * count);
+  return size * count;
+}
+
+nlohmann::json getUserInfo(const std::string& appKey, const std::string& jwt) {
+  std::string response;
+  CURL* curl = curl_easy_init();
+  if (!curl) throw std::runtime_error("curl_easy_init failed");
+  curl_slist* headers = nullptr;
+  headers = curl_slist_append(headers, ("Authorization: " + appKey).c_str());
+  headers = curl_slist_append(headers, ("Token: " + jwt).c_str());
+  curl_easy_setopt(curl, CURLOPT_URL, "https://your-moonbase-host/api/user/info");
+  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, collect);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+  curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+  const CURLcode result = curl_easy_perform(curl);
+  curl_slist_free_all(headers);
+  curl_easy_cleanup(curl);
+  if (result != CURLE_OK) throw std::runtime_error(curl_easy_strerror(result));
+
+  const auto body = nlohmann::json::parse(response);
+  if (body.value("status_overview", "") != "success") throw std::runtime_error(body.value("status_message", "REQUEST_FAILED"));
+  return body["status_data"]["user"];
+}
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="ruby">
+```ruby
+require "json"
+require "net/http"
+require "uri"
+
+def get_user_info(app_key, jwt)
+  uri = URI("https://your-moonbase-host/api/user/info")
+  response = Net::HTTP.get_response(uri, { "Authorization" => app_key, "Token" => jwt })
+  body = JSON.parse(response.body)
+  raise "#{body['status_code']} #{body['status_message']}" unless body["status_overview"] == "success"
+
+  body["status_data"]["user"]
+end
+
+user = get_user_info("<PUBLIC_API_KEY>", "<jwt_token>")
+puts user["products"].map { |entry| entry["productName"] }
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="go">
+```go
+package moonbase
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"time"
+)
+
+type OwnedProduct struct {
+	Product        string `json:"product"`
+	ProductName    string `json:"productName"`
+	ExpirationDate string `json:"expiration_date"`
+}
+
+type User struct {
+	ID       string         `json:"_id"`
+	Username string         `json:"username"`
+	Email    string         `json:"email"`
+	Products []OwnedProduct `json:"products"`
+	HWID     []string       `json:"hwid"`
+}
+
+func GetUserInfo(appKey, jwt string) (*User, error) {
+	req, _ := http.NewRequest(http.MethodGet, "https://your-moonbase-host/api/user/info", nil)
+	req.Header.Set("Authorization", appKey)
+	req.Header.Set("Token", jwt)
+
+	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var body struct {
+		StatusMessage  string `json:"status_message"`
+		StatusOverview string `json:"status_overview"`
+		StatusCode     int    `json:"status_code"`
+		StatusData     struct {
+			User User `json:"user"`
+		} `json:"status_data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return nil, err
+	}
+	if body.StatusOverview != "success" {
+		return nil, fmt.Errorf("%d %s", body.StatusCode, body.StatusMessage)
+	}
+	return &body.StatusData.User, nil
+}
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="rust">
+```rust
+// Cargo.toml: reqwest = { version = "0.12", features = ["json"] }, serde_json = "1", tokio = { version = "1", features = ["full"] }
+use serde_json::Value;
+
+async fn get_user_info(app_key: &str, jwt: &str) -> Result<Value, Box<dyn std::error::Error>> {
+    let body: Value = reqwest::Client::new()
+        .get("https://your-moonbase-host/api/user/info")
+        .header("Authorization", app_key)
+        .header("Token", jwt)
+        .timeout(std::time::Duration::from_secs(30))
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    if body["status_overview"] != "success" {
+        return Err(format!("{} {}", body["status_code"], body["status_message"]).into());
+    }
+    Ok(body["status_data"]["user"].clone())
+}
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="php">
+```php
+<?php
+function moonbase_user_info(string $appKey, string $jwt): array
+{
+    $ch = curl_init('https://your-moonbase-host/api/user/info');
+    curl_setopt_array($ch, [
+        CURLOPT_HTTPHEADER => ["Authorization: $appKey", "Token: $jwt"],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 30,
+    ]);
+    $raw = curl_exec($ch);
+    if ($raw === false) {
+        throw new RuntimeException(curl_error($ch));
+    }
+    curl_close($ch);
+
+    $body = json_decode($raw, true);
+    if (($body['status_overview'] ?? '') !== 'success') {
+        throw new RuntimeException($body['status_message'] ?? 'REQUEST_FAILED');
+    }
+    return $body['status_data']['user'];
+}
+
+$user = moonbase_user_info('<PUBLIC_API_KEY>', '<jwt_token>');
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="swift">
+```swift
+import Foundation
+
+struct OwnedProduct: Decodable {
+    let product: String
+    let productName: String
+    let expiration_date: String
+}
+
+struct V1User: Decodable {
+    let _id: String
+    let username: String
+    let email: String
+    let products: [OwnedProduct]
+}
+
+struct UserInfoResponse: Decodable {
+    struct Payload: Decodable { let user: V1User }
+    let status_message: String
+    let status_overview: String
+    let status_data: Payload?
+}
+
+enum MoonbaseError: Error { case failed(String) }
+
+func getUserInfo(appKey: String, jwt: String) async throws -> V1User {
+    var request = URLRequest(url: URL(string: "https://your-moonbase-host/api/user/info")!)
+    request.setValue(appKey, forHTTPHeaderField: "Authorization")
+    request.setValue(jwt, forHTTPHeaderField: "Token")
+    request.timeoutInterval = 30
+
+    let (data, _) = try await URLSession.shared.data(for: request)
+    let body = try JSONDecoder().decode(UserInfoResponse.self, from: data)
+    guard body.status_overview == "success", let result = body.status_data else {
+        throw MoonbaseError.failed(body.status_message)
+    }
+    return result.user
+}
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="lua">
+```lua
+-- LuaSocket + LuaSec (HTTPS) + dkjson
+local https = require("ssl.https")
+local ltn12 = require("ltn12")
+local json = require("dkjson")
+
+local function get_user_info(app_key, jwt)
+  local chunks = {}
+  local ok, code = https.request({
+    url = "https://your-moonbase-host/api/user/info",
+    method = "GET",
+    headers = { ["Authorization"] = app_key, ["Token"] = jwt },
+    sink = ltn12.sink.table(chunks),
+  })
+  if not ok then error("request failed: " .. tostring(code)) end
+
+  local body = json.decode(table.concat(chunks))
+  if not body or body.status_overview ~= "success" then
+    error(body and body.status_message or ("HTTP " .. tostring(code)))
+  end
+  return body.status_data.user
+end
+
+local user = get_user_info("<PUBLIC_API_KEY>", "<jwt_token>")
+for _, entry in ipairs(user.products) do print(entry.productName, entry.expiration_date) end
+```
+  </CodeBlockTab>
+</CodeBlockTabs>

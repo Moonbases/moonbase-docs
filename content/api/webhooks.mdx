@@ -1,0 +1,298 @@
+---
+title: Webhooks
+description: Signed outgoing events for orders, refunds, licenses, customers, subscriptions and reviews, with retries and Discord channel messages.
+---
+
+Moonbase can POST an event to your own URL whenever something happens in the store: a paid order, a refund, a redeemed license. The store owner adds endpoints in **Dashboard → Webhooks** (see [Webhooks in the Guide](/docs/guide/features/webhooks)) and picks the events each one receives. Each endpoint gets a signing secret, shown once.
+
+<Callout type="info" title="Not the payment provider webhooks">
+  This page is about events Moonbase sends to you. The URLs that Stripe, PayPal and Coinbase Commerce call on Moonbase (`/api/purchase/webhook…`) are set up in [Payments](/docs/guide/payments).
+</Callout>
+
+## Events
+
+| Event | Sent when | `data` |
+| --- | --- | --- |
+| `order.completed` | An order is fulfilled (paid, free or paid with store credit), including subscription renewals | Order |
+| `order.refunded` | An order is refunded, or revoked by an admin after an outside refund | Order |
+| `order.disputed` | A payment is disputed (chargeback) | Order |
+| `license.redeemed` | A license key is redeemed, or a product is granted to an account | License |
+| `license.revoked` | A license is revoked from the dashboard, the admin API or the Discord bot | License |
+| `customer.registered` | An account signs up, or a guest-checkout account sets its password | `{ customer }` |
+| `subscription.payment_failed` | A renewal payment fails | Subscription |
+| `subscription.canceled` | A subscription ends | Subscription |
+| `review.created` | A customer posts a new review | Review |
+| `webhook.test` | Only from "Send test event"; can't be subscribed to | `{ message }` |
+
+## Request
+
+```http
+POST /your/endpoint HTTP/1.1
+Content-Type: application/json
+User-Agent: Moonbase-Webhooks/2.0.0
+Moonbase-Event: order.completed
+Moonbase-Delivery: 6671b2c94e2b7c0012cd9abc
+Moonbase-Signature: t=1761472800,v1=5f2b0c0e6d1a3c…
+
+{"id":"evt_3b9f2c7d0e5a4f1b8c6d2e9a7f1b3c5d","type":"order.completed","createdAt":"2026-10-26T10:00:00.000Z","data":{…}}
+```
+
+| Header | Value |
+| --- | --- |
+| `Moonbase-Event` | The event type |
+| `Moonbase-Delivery` | ID of this delivery (one per endpoint per event; the same on retries) |
+| `Moonbase-Signature` | `t=<unix seconds>,v1=<hex HMAC-SHA256>`, see below |
+| `User-Agent` | `Moonbase-Webhooks/<API version>` |
+
+The body is always the envelope `{ id, type, createdAt, data }`. `id` (`evt_…`) identifies the event: it is the same in every retry and redelivery, so use it to ignore duplicates.
+
+## Payloads
+
+<Tabs items={['Order', 'License', 'Subscription', 'Review', 'Customer']} defaultIndex={0}>
+  <Tab>
+```json
+{
+  "id": "evt_3b9f2c7d0e5a4f1b8c6d2e9a7f1b3c5d",
+  "type": "order.completed",
+  "createdAt": "2026-10-26T10:00:00.000Z",
+  "data": {
+    "orderId": "cs_live_a1B2c3",
+    "provider": "stripe",
+    "status": "completed",
+    "currency": "USD",
+    "subtotal": 20,
+    "discount": { "code": "LAUNCH10", "amount": 2 },
+    "total": 18,
+    "customer": { "id": "665f1c2e9b1d4a0012ab34cd", "username": "alice", "email": "alice@example.com" },
+    "items": [
+      { "productId": "665f1c2e9b1d4a0012ab0001", "productName": "Pro Edition", "plan": "lifetime", "quantity": 1, "unitPrice": 20 }
+    ],
+    "subscriptionId": null,
+    "renewal": false
+  }
+}
+```
+
+`orderId` is the provider's reference (the admin API's `paymentId`). `status` is the order's payment status (`completed`, `refunded`, `disputed`…). `subscriptionId` is set when the order started or renewed a subscription, and `renewal` is `true` for automatic renewal payments. `productName` is `null` for deleted products, `customer` is `null` for deleted accounts.
+  </Tab>
+  <Tab>
+```json
+{
+  "id": "evt_…",
+  "type": "license.redeemed",
+  "createdAt": "2026-10-26T10:00:00.000Z",
+  "data": {
+    "licenseId": "6671a9f04e2b7c0012cd5678",
+    "productId": "665f1c2e9b1d4a0012ab0001",
+    "productName": "Pro Edition",
+    "plan": "monthly",
+    "expiresAt": "2026-11-26T10:00:00.000Z",
+    "customer": { "id": "665f1c2e9b1d4a0012ab34cd", "username": "alice", "email": "alice@example.com" }
+  }
+}
+```
+
+`expiresAt` is `null` for lifetime access and always `null` in `license.revoked`.
+  </Tab>
+  <Tab>
+```json
+{
+  "id": "evt_…",
+  "type": "subscription.payment_failed",
+  "createdAt": "2026-10-26T10:00:00.000Z",
+  "data": {
+    "subscriptionId": "6671c0d34e2b7c0012cdaaaa",
+    "status": "past_due",
+    "plan": "monthly",
+    "currentPeriodEnd": "2026-10-26T10:00:00.000Z",
+    "customer": { "id": "665f1c2e9b1d4a0012ab34cd", "username": "alice", "email": "alice@example.com" },
+    "items": [{ "productId": "665f1c2e9b1d4a0012ab0001", "productName": "Pro Edition", "quantity": 1, "unitPrice": 5 }],
+    "paymentUrl": "https://invoice.stripe.com/i/…",
+    "graceUntil": "2026-10-29T10:00:00.000Z"
+  }
+}
+```
+
+`paymentUrl` (the provider's payment page, when it gives one) and `graceUntil` (access continues until then while the payment is retried) are only sent with `subscription.payment_failed`.
+  </Tab>
+  <Tab>
+```json
+{
+  "id": "evt_…",
+  "type": "review.created",
+  "createdAt": "2026-10-26T10:00:00.000Z",
+  "data": {
+    "reviewId": "6671c5e84e2b7c0012cdbbbb",
+    "productId": "665f1c2e9b1d4a0012ab0001",
+    "productName": "Pro Edition",
+    "rating": 5,
+    "title": "Does what it says",
+    "body": "Set up in five minutes.",
+    "status": "published",
+    "customer": { "id": "665f1c2e9b1d4a0012ab34cd", "username": "alice", "email": "alice@example.com" }
+  }
+}
+```
+  </Tab>
+  <Tab>
+```json
+{
+  "id": "evt_…",
+  "type": "customer.registered",
+  "createdAt": "2026-10-26T10:00:00.000Z",
+  "data": {
+    "customer": { "id": "665f1c2e9b1d4a0012ab34cd", "username": "alice", "email": "alice@example.com" }
+  }
+}
+```
+  </Tab>
+</Tabs>
+
+## Verifying the signature
+
+`Moonbase-Signature` is `t=<timestamp>,v1=<signature>`, where `signature` is the hex HMAC-SHA256 of the string `<timestamp>.<raw request body>`, keyed with the endpoint's secret (`whsec_…`, the whole string). To verify:
+
+<Steps>
+  <Step>Read the **raw** body bytes, before any JSON parsing or re-serialisation.</Step>
+  <Step>Split the header into `t` and `v1`.</Step>
+  <Step>Compute HMAC-SHA256 of `t + "." + body` with your secret and compare it with `v1` in constant time.</Step>
+  <Step>Reject timestamps too far from your clock (5 minutes is a reasonable window) to stop replays.</Step>
+  <Step>Answer `2xx` quickly; do slow work after responding, and skip event `id`s you already handled.</Step>
+</Steps>
+
+<CodeBlockTabs defaultValue="node">
+  <CodeBlockTabsList>
+    <CodeBlockTabsTrigger value="node">Node.js (Express)</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="python">Python (Flask)</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="php">PHP</CodeBlockTabsTrigger>
+  </CodeBlockTabsList>
+  <CodeBlockTab value="node">
+```javascript
+import crypto from "node:crypto";
+import express from "express";
+
+const SECRET = process.env.MOONBASE_WEBHOOK_SECRET; // whsec_…
+const TOLERANCE_SECONDS = 300;
+
+function verifyMoonbaseSignature(header, rawBody) {
+  const match = /^t=(\d+),v1=([0-9a-f]{64})$/.exec(header ?? "");
+  if (!match) return false;
+  const [, timestamp, signature] = match;
+  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > TOLERANCE_SECONDS) return false;
+  const expected = crypto.createHmac("sha256", SECRET).update(`${timestamp}.${rawBody}`).digest();
+  return crypto.timingSafeEqual(expected, Buffer.from(signature, "hex"));
+}
+
+const app = express();
+app.post("/moonbase/webhooks", express.raw({ type: "application/json" }), (req, res) => {
+  const body = req.body.toString("utf8");
+  if (!verifyMoonbaseSignature(req.get("Moonbase-Signature"), body)) return res.status(400).end();
+  const event = JSON.parse(body);
+  res.status(204).end();
+  // Handle after answering; deduplicate on event.id.
+  handleEvent(event);
+});
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="python">
+```python
+import hashlib
+import hmac
+import os
+import re
+import time
+
+from flask import Flask, abort, request
+
+SECRET = os.environ["MOONBASE_WEBHOOK_SECRET"].encode()  # whsec_…
+TOLERANCE_SECONDS = 300
+app = Flask(__name__)
+
+
+def verify_moonbase_signature(header: str, raw_body: bytes) -> bool:
+    match = re.fullmatch(r"t=(\d+),v1=([0-9a-f]{64})", header or "")
+    if not match:
+        return False
+    timestamp, signature = match.groups()
+    if abs(time.time() - int(timestamp)) > TOLERANCE_SECONDS:
+        return False
+    expected = hmac.new(SECRET, timestamp.encode() + b"." + raw_body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
+@app.post("/moonbase/webhooks")
+def moonbase_webhook():
+    raw = request.get_data()
+    if not verify_moonbase_signature(request.headers.get("Moonbase-Signature", ""), raw):
+        abort(400)
+    event = request.get_json()
+    handle_event(event)  # deduplicate on event["id"]
+    return "", 204
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="php">
+```php
+<?php
+$secret = getenv('MOONBASE_WEBHOOK_SECRET'); // whsec_…
+$raw = file_get_contents('php://input');
+$header = $_SERVER['HTTP_MOONBASE_SIGNATURE'] ?? '';
+
+if (!preg_match('/^t=(\d+),v1=([0-9a-f]{64})$/', $header, $m) || abs(time() - (int) $m[1]) > 300) {
+    http_response_code(400);
+    exit;
+}
+$expected = hash_hmac('sha256', $m[1] . '.' . $raw, $secret);
+if (!hash_equals($expected, $m[2])) {
+    http_response_code(400);
+    exit;
+}
+
+$event = json_decode($raw, true);
+http_response_code(204);
+// Handle $event['type'] / $event['data']; deduplicate on $event['id'].
+```
+  </CodeBlockTab>
+</CodeBlockTabs>
+
+The signature is computed again for every attempt, so `t` changes on retries while the body and event `id` stay the same.
+
+## Delivery, retries and auto-disable
+
+- Each event is queued for every **enabled** endpoint subscribed to it and sent right away.
+- A delivery succeeds on any `2xx` answer within **10 seconds**. Other statuses, timeouts and connection errors are failures; the first 500 characters of the error or response body are kept in the delivery log.
+- Failed deliveries are retried after 1 minute, 5 minutes, 30 minutes, 2 hours, 6 hours, 12 hours and 24 hours: **8 attempts** over about two days. Then the delivery is marked `failed`.
+- After **50 failed attempts in a row** (across deliveries) the endpoint is turned off, with the reason shown in the dashboard. Turning it back on resets the counter. Events are not queued for disabled endpoints.
+- From the dashboard (or the endpoints below) the owner can redeliver any delivery, which sends it again at once, and send a `webhook.test` event. Both also reach disabled endpoints, and are not retried if they fail.
+- URLs must be `http` or `https`. Deliveries to private, loopback and link-local addresses (including names that resolve to them) are refused unless the API runs with `WEBHOOKS_ALLOW_PRIVATE_NETWORKS=true`.
+- If the secret can no longer be decrypted (the database was moved under another `ENCRYPT_KEY`), attempts fail until the secret is rotated.
+
+## Discord channels
+
+Paste a Discord webhook URL (`https://discord.com/api/webhooks/…`, also `discordapp.com`, `ptb.discord.com` and `canary.discord.com`) as the endpoint URL and Moonbase sends a readable embed instead of the JSON event: new orders, refunds, disputes, redeemed and revoked licenses, new reviews and new customers, with the store name as the sender. These messages never mention anyone, whatever product or user names contain. Discord deliveries carry no `Moonbase-*` headers or signature, and log only the host, never the URL's token.
+
+## Managing endpoints over the API
+
+Webhook endpoints carry signing secrets and customer data, so only the **owner's session** (public app key + `Token` of the owner) can manage them; API keys get `403 API_KEY_NOT_ALLOWED`.
+
+| Method | Path | Body / result |
+| --- | --- | --- |
+| `GET` | `/api/v2/admin/webhooks` | Endpoints with their last delivery |
+| `POST` | `/api/v2/admin/webhooks` | `{ url, description?, events, enabled? }` → `201 { endpoint, secret }` |
+| `GET` | `/api/v2/admin/webhooks/:id` | One endpoint (never the secret) |
+| `PATCH` | `/api/v2/admin/webhooks/:id` | Any of `url`, `description`, `events`, `enabled` |
+| `DELETE` | `/api/v2/admin/webhooks/:id` | Deletes the endpoint and its delivery log |
+| `POST` | `/api/v2/admin/webhooks/:id/secret` | Rotates the secret → `{ endpoint, secret }` |
+| `POST` | `/api/v2/admin/webhooks/:id/test` | Sends `webhook.test` and returns the delivery |
+| `GET` | `/api/v2/admin/webhooks/:id/deliveries` | Paginated deliveries; filter with `status` (`pending`, `succeeded`, `failed`) |
+| `POST` | `/api/v2/admin/webhooks/:id/deliveries/:deliveryId/retry` | Redelivers now and returns the delivery |
+
+<TypeTable
+  type={{
+    url: { type: 'string', description: 'http(s) URL, up to 2048 characters.', required: true },
+    description: { type: 'string', description: 'Up to 200 characters.', default: '""' },
+    events: { type: 'string[]', description: 'At least one event from the table above (not webhook.test). Duplicates are removed.', required: true },
+    enabled: { type: 'boolean', description: 'Whether events are sent.', default: 'true' },
+  }}
+/>
+
+An endpoint is returned as `{ id, url, description, events, enabled, format ("json" or "discord"), disabledReason, consecutiveFailures, lastDelivery, createdAt }`, and a delivery as `{ id, endpointId, eventId, event, status, attempts, responseStatus, error, durationMs, nextAttemptAt, deliveredAt, createdAt }`.

@@ -1,51 +1,186 @@
 ---
 title: Errors and status codes
-description: Error response shape and common failure cases.
+description: v2 and legacy v1 error envelopes, HTTP statuses, common error codes and rate-limit responses.
 ---
 
-Most errors follow the same envelope so clients can handle them consistently.
+Every failure carries a stable, machine-readable code. v2 and v1 wrap it differently, and v1 keeps some historical status codes.
+
+## v2 envelope
 
 <TypeTable
   type={{
-    status_message: { type: 'string', description: 'Machine readable status identifier.', required: true },
-    status_overview: { type: 'string', description: 'success or failed.', required: true },
-    status_code: { type: 'number', description: 'HTTP status code.', required: true },
-    status_data: { type: 'object', description: 'Optional error payload.', required: false },
+    ok: { type: 'false', description: 'Always false on failure (true on success, with data).', required: true },
+    'error.code': { type: 'string', description: 'Stable identifier such as VALIDATION_FAILED. Branch on this.', required: true },
+    'error.message': { type: 'string', description: 'Human-readable explanation. May change between versions.', required: true },
+    'error.details': { type: 'unknown', description: 'Extra context when available: validation issues, limits, retry times.', required: false },
   }}
 />
 
-<CodeBlockTabs defaultValue="example">
-  <CodeBlockTabsList>
-    <CodeBlockTabsTrigger value="example">Example</CodeBlockTabsTrigger>
-  </CodeBlockTabsList>
-  <CodeBlockTab value="example">
-    ```json
-    {
-      "status_message": "ACCESS_DENIED",
-      "status_overview": "failed",
-      "status_code": 403,
-      "status_data": {
-        "reason": "Token does not have access to this resource."
-      }
-    }
-    ```
-  </CodeBlockTab>
-</CodeBlockTabs>
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "FLOATING_LIMIT_REACHED",
+    "message": "All 2 devices allowed at a time are using Render Node right now.",
+    "details": { "limit": 2, "retryAt": "2026-10-26T10:15:00.000Z" }
+  }
+}
+```
 
-<Tabs items={['Auth errors', 'Permission errors', 'Rate limits']} defaultIndex={0}>
+Validation failures always use `422 VALIDATION_FAILED`, with one entry per problem:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "VALIDATION_FAILED",
+    "message": "The request is invalid.",
+    "details": [
+      { "path": "nonce", "message": "Use 8–128 letters, digits, dashes or underscores" },
+      { "path": "hwid", "message": "…" }
+    ]
+  }
+}
+```
+
+Unknown v2 paths answer `404 NOT_FOUND` ("This endpoint does not exist.") in the same envelope.
+
+## v1 envelope
+
+The legacy routes under `/api/...` keep the 1.x shape:
+
+<TypeTable
+  type={{
+    status_message: { type: 'string', description: 'The error code (or the success message, such as USER_LOGGED_IN).', required: true },
+    status_overview: { type: '"failed" | "success"', description: 'failed for errors.', required: true },
+    status_code: { type: 'number', description: 'The HTTP status of the response.', required: true },
+    status_data: { type: 'object', description: 'Extra data for some errors, e.g. { ban_reason, ban_date } with BANNED or { issues } with PASSWORD_TOO_WEAK.', required: false },
+  }}
+/>
+
+```json
+{
+  "status_message": "BANNED",
+  "status_overview": "failed",
+  "status_code": 403,
+  "status_data": { "ban_reason": "Chargeback", "ban_date": "2026-10-20T08:00:00.000Z" }
+}
+```
+
+Differences from v2 to keep in mind when you handle both:
+
+- v1 reports invalid input as `400 INVALID_REQUEST` (or a field-specific code such as `EMAIL_INVALID`), without details.
+- Many v1 lookups keep their historical `406` status, for example `INVALID_LICENSE`, `LICENSE_ALREADY_ACTIVATED`, `INVALID_PRODUCT`, `INVALID_PIN`, and `INVALID_USER` when v1 sign-in names an unknown username. The same failure in v2 uses `401`, `404` or `409`.
+- v1 sign-in reports unknown usernames (`406 INVALID_USER`) and wrong passwords (`400 INVALID_PASSWORD`) separately; v2 answers both with `401 INVALID_CREDENTIALS`.
+- Unknown v1 paths answer `{ "status_message": "NOT_FOUND", "status_overview": "failed", "status_code": 404 }`.
+
+## HTTP statuses
+
+| Status | Meaning in Moonbase |
+| --- | --- |
+| `200` / `201` | Success; `201` when something was created (or a reseller claim handed out new keys) |
+| `206` / `416` | Partial file download / unsatisfiable `Range` |
+| `400` | Malformed request: `INVALID_JSON`, `INVALID_REQUEST`, missing auth headers (`FAILED_AUTHENTICATION`), v1 validation |
+| `401` | Credentials or session not accepted, or a device/IP limit at sign-in |
+| `403` | Authenticated but not allowed: ban, blacklist, permissions, wrong kind of key |
+| `404` | Not found (or not visible to you) |
+| `406` | v1 only: historical status for failed lookups |
+| `409` | Conflicts and limits that depend on current state |
+| `413` | Body too large (`PAYLOAD_TOO_LARGE`; JSON bodies are limited to 100 kB) |
+| `422` | v2 validation failure (`VALIDATION_FAILED`), weak or breached password |
+| `429` | Rate limited, or a self-service cooldown |
+| `500` | `SERVER_ERROR`: unexpected; the details are in the API log |
+| `503` | Not configured or temporarily unavailable (`DASHBOARD_NOT_INITIALIZED`, `PAYMENT_DISABLED`…) |
+
+## Common codes
+
+<Tabs items={['Authentication', 'Permissions', 'Client and devices', 'Requests']} defaultIndex={0}>
   <Tab>
-    - 401 UNAUTHORIZED: Credentials missing or invalid.
-    - 403 FORBIDDEN: Token exists but is not allowed.
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| 400 | `FAILED_AUTHENTICATION` | `Authorization` or `Token` header missing |
+| 401 | `AUTHENTICATION_FAILED` | The app key is wrong (or the private key is required) |
+| 401 | `INVALID_TOKEN` | Session token invalid or expired: sign in again |
+| 401 | `TOKEN_REVOKED` | The password changed after this session started |
+| 401 | `INVALID_USER` | The session's account no longer exists |
+| 401 | `INVALID_CREDENTIALS` | v2 sign-in: unknown account or wrong password |
+| 401 | `INVALID_API_KEY` | `mbk_`/`mbr_` key unknown, revoked, expired or no longer usable |
+| 403 | `BANNED` | Account banned (`details.reason`, `details.date`; v1: `status_data.ban_reason`, `ban_date`) |
+| 403 | `BLACKLISTED` | Request IP or hardware ID is blocked |
+| 503 | `DASHBOARD_NOT_INITIALIZED` | The API has not finished its first start (no app keys yet) |
+
   </Tab>
   <Tab>
-    - 403 ACCESS_DENIED: The user does not own the resource.
-    - 404 NOT_FOUND: The resource does not exist or is hidden.
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| 403 | `INSUFFICIENT_PERMISSIONS` | Not an admin, the admin or API key lacks the area, or the route is owner-only |
+| 403 | `API_KEY_NOT_ALLOWED` | An API key or reseller key was used where it is not accepted |
+| 403 | `SELF_DEALING_FORBIDDEN` | Admins can't give their own account credit, payouts, gift cards or reseller terms |
+| 403 | `CANNOT_MODIFY_OWNER`, `CANNOT_MODIFY_ADMIN` | The target account is protected |
+| 403 | `NOT_A_RESELLER` | Reseller API called by an account that is not an active reseller |
+
   </Tab>
   <Tab>
-    - 429 RATE_LIMITED: Too many requests in a short window.
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| 401 | `HWID_LIMIT_EXCEEDED` | Account device limit reached, or this device is past a lowered limit (`details.limit`) |
+| 401 | `IP_LIMIT_EXCEEDED` | Account IP limit reached |
+| 401 | `DEVICE_LIMIT_EXCEEDED` | All places of a product with its own devices are taken |
+| 409 | `FLOATING_LIMIT_REACHED` | All floating places are in use (`details.limit`, `details.retryAt`) |
+| 404 | `INVALID_PRODUCT` | Unknown product ID |
+| 409 | `SIGN_IN_CONFLICT` | Too many simultaneous sign-ins for one account: retry |
+
+SDK-only codes (`SESSION_EXPIRED`, `TOKEN_EXPIRED`, `TOKEN_NOT_YET_VALID`, `INVALID_SIGNATURE`, `WRONG_DEVICE`, `NONCE_MISMATCH`, `NETWORK_ERROR`…) are listed on the [SDKs](/docs/api/sdks#errors) page.
+
+  </Tab>
+  <Tab>
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| 400 | `INVALID_JSON` | The body is not valid JSON |
+| 400 | `INVALID_REQUEST` | Body keys starting with `$`, or (v1) any invalid input |
+| 413 | `PAYLOAD_TOO_LARGE` | Body over the limit |
+| 415 | `UNSUPPORTED_ENCODING` | v1: unsupported body encoding or charset |
+| 422 | `VALIDATION_FAILED` | v2: invalid input, see `details` |
+| 404 | `NOT_FOUND` | Unknown endpoint |
+| 500 | `SERVER_ERROR` | Unexpected failure |
+
   </Tab>
 </Tabs>
 
-<Callout type="warning" title="Rate limiting">
-  When you receive a 429, back off and retry with exponential delay. Avoid running parallel retries.
-</Callout>
+Domain-specific codes (`PLAN_NOT_AVAILABLE`, `LICENSE_ALREADY_ACTIVATED`, `NOT_ENOUGH_KEYS`, `CLAIM_IN_PROGRESS`…) are documented with their endpoints.
+
+## Rate limits
+
+| Code | Returned by |
+| --- | --- |
+| `429 TOO_MANY_REQUESTS` | The general per-IP budget (300 requests / 15 minutes) |
+| `429 TOO_MANY_ATTEMPTS` | Failed sign-ins (per IP and per account name), credential checks, license key redemption, binding resets and device removals, password reset emails, discount code attempts, guest checkouts, adding teammates |
+| `429 RESET_COOLDOWN_ACTIVE` | A self-service binding reset or device removal within the store's cooldown (`details.retryAt`; v1 `status_data.retry_at`) |
+
+Rate-limited responses include `Retry-After` (seconds). Wait at least that long, retry one request at a time, and never retry sign-ins in a loop: failed attempts are what the limits count. The full table is on the [Authentication](/docs/api/authentication#rate-limits) page.
+
+## Handling errors
+
+```javascript
+const res = await fetch(`${API}/api/v2/client/license`, { method: "POST", headers, body });
+const body = await res.json();
+if (!body.ok) {
+  switch (body.error.code) {
+    case "INVALID_TOKEN":
+    case "TOKEN_REVOKED":
+    case "INVALID_USER":
+      return askForPasswordAgain();
+    case "FLOATING_LIMIT_REACHED":
+      return showAllSeatsInUse(body.error.details.retryAt);
+    case "TOO_MANY_REQUESTS":
+    case "TOO_MANY_ATTEMPTS":
+      return retryAfter(Number(res.headers.get("Retry-After")));
+    default:
+      throw new Error(`${body.error.code}: ${body.error.message}`);
+  }
+}
+```

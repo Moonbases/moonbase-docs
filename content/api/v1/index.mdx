@@ -1,0 +1,57 @@
+---
+title: Legacy v1 API
+description: The 1.x loader API under /api, as served by Moonbase 2.0, and what changed.
+---
+
+The v1 API is the HTTP surface Moonbase 1.x loaders were built against. Moonbase 2.0 keeps its routes, request fields, status codes and `{ status_message, status_overview, status_code, status_data }` envelope, so **loaders built for 1.8 keep working without a rebuild**. Moonbase's contract tests cover these routes.
+
+<Callout type="warn" title="For new software, use the client API">
+  v1 answers are plain JSON: anything between the loader and the API can fake "licensed". New loaders should use an [SDK](/docs/api/sdks) or the [client API](/docs/api/client-api), which return Ed25519-signed license tokens, work offline, and support per-product devices and floating licenses. Integrations that manage the store should use the [admin API](/docs/api/admin-api) with API keys instead of the v1 admin routes.
+</Callout>
+
+## Authentication
+
+| Requests | Headers |
+| --- | --- |
+| Sign-in (`POST /api/auth/user`), health, product catalog | None |
+| User routes (`/api/user/...`) | `Authorization: <public app key>`, `Token: <JWT>` |
+| Most admin routes (`/api/admin/...`, file management) | `Authorization: <private app key>`, `Token: <JWT of an admin>` with the route's area |
+
+The app keys were printed once by the API on its first start; the app's `.env` has them as `PUBLIC_API_KEY` and `PRIVATE_API_KEY`. The JWT is the same session token as in v2: it lasts **1 day**. API keys (`mbk_`, `mbr_`) are refused by every authenticated v1 route with `403 API_KEY_NOT_ALLOWED`.
+
+## Loader endpoints
+
+| Method | Path | Page |
+| --- | --- | --- |
+| `POST` | `/api/auth/user` | [Sign-in](/docs/api/v1/authentication) |
+| `GET` | `/api/user/info` | [User profile](/docs/api/v1/user-info) |
+| `GET` | `/api/user/files/:file` | [User files](/docs/api/v1/files) |
+| `POST` | `/api/file/list-by-product` | [Reference](/docs/api/v1/reference) |
+| `POST` | `/api/file/create-link` | [Reference](/docs/api/v1/reference) |
+| `GET` | `/api/file/:file?ticket=…` | [Reference](/docs/api/v1/reference) |
+| `POST` | `/api/user/license/activate` | [Reference](/docs/api/v1/reference) |
+| `POST` | `/api/user/reset-binding` | [Reference](/docs/api/v1/reference) |
+| `GET` | `/api/health` | [Reference](/docs/api/v1/reference) |
+
+## What changed in 2.0
+
+These differences can matter to existing loaders and scripts:
+
+- **Hardware IDs** can be up to **4096** characters. Longer values (or non-strings) are rejected with `400 INVALID_REQUEST`. Long raw IDs sent by 1.8 loaders stay bound, and the same value works with the client API, so a loader moved to an SDK keeps its customers' devices if it sends the same ID.
+- **Device limits.** v1 sign-in only knows account devices: it never sends a product ID, so products set to count their own devices or to be floating licenses are limited by the account's device limit for v1 loaders. When an account's limit drops (for example seats lapse), the devices bound most recently past the limit get `401 HWID_LIMIT_EXCEEDED` until the customer removes a device.
+- **Rate limits.** Failed sign-ins are limited per account name (20 per 15 minutes) as well as per IP. License key redemption and binding resets are rate limited. Rejections are `429 TOO_MANY_ATTEMPTS` or `429 TOO_MANY_REQUESTS` with a `Retry-After` header. See [Rate limits](/docs/api/authentication#rate-limits).
+- **Downloads** start at once (also for multi-GB files), support `Range` requests to resume, and are never compressed. A file the user may not download answers `404 FILE_NOT_FOUND`, not `403`.
+- **Redeeming a key for someone else.** `POST /api/user/license/activate` with another account's `email` needs an admin with the `licenses` area; anyone else gets `403 INSUFFICIENT_PERMISSIONS`.
+- **Admin areas.** v1 admin routes check the admin's areas (products, licenses, users, security, files, logs, orders) as well as the private key. Admins without the area get `403 INSUFFICIENT_PERMISSIONS`.
+- **Request bodies** with keys starting with `$` are rejected with `400 INVALID_REQUEST`, and malformed JSON with `400 INVALID_JSON`.
+- **Purpose-bound tokens** (download tickets) are not accepted as sessions: `401 INVALID_TOKEN`.
+
+## Pages
+
+<Cards>
+  <Card title="Sign-in" href="/docs/api/v1/authentication" description="POST /api/auth/user: username, password and hardware ID." />
+  <Card title="User profile" href="/docs/api/v1/user-info" description="GET /api/user/info with the public key and JWT." />
+  <Card title="User files" href="/docs/api/v1/files" description="Download product files as binary responses." />
+  <Card title="Reference" href="/docs/api/v1/reference" description="Every loader endpoint with requests, responses and status codes." />
+  <Card title="Examples" href="/docs/api/v1/examples" description="Ready-to-run v1 requests in several languages." />
+</Cards>

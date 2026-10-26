@@ -1,0 +1,319 @@
+---
+title: Admin API
+description: Automate your store from your own servers with API keys, the OpenAPI description and the /api/v2/admin endpoints.
+---
+
+The admin API is the part of `/api/v2/admin` that [API keys](/docs/api/authentication#api-keys-mbk_) can call. It is meant for your own integrations: a game server that grants a product after an in-game purchase, a support bot that looks up orders, a nightly export.
+
+<Callout type="info" title="Base URL and authentication">
+  `https://your-moonbase-host/api/v2`, with `Authorization: Bearer mbk_…` and no `Token` header. The owner creates keys in **Dashboard → Developers** and picks the areas each key may use; see [API keys for your integrations](/docs/guide/security#api-keys-for-your-integrations).
+</Callout>
+
+## Conventions
+
+- Bodies are JSON (`Content-Type: application/json`, up to 100 kB). Keys starting with `$` are rejected with `400 INVALID_REQUEST`.
+- Every response is the v2 envelope: `{ "ok": true, "data": … }` or `{ "ok": false, "error": { "code", "message", "details"? } }`.
+- IDs are 24-character hex strings. Orders are addressed by their `paymentId` (the provider's reference).
+- Paginated lists take `page` (from 1) and `limit` (1–200, default 50) and return `{ items, page, limit, total, totalPages }`. A few small lists (products, resellers, creators) return a plain array.
+- Invalid input fails with `422 VALIDATION_FAILED` and `details: [{ path, message }]`.
+- Creating something usually answers `201`; other successful calls answer `200`.
+
+## Endpoints by area
+
+A key needs the area shown for each endpoint; with another area the call fails with `403 INSUFFICIENT_PERMISSIONS`. This list is the same registry the OpenAPI description is generated from, and a test calls every entry with a key of its area and of another one.
+
+<Accordions type="multiple">
+  <Accordion title="products">
+
+| Method | Path | Summary |
+| --- | --- | --- |
+| `GET` | `/admin/products` | List products, including archived ones |
+| `GET` | `/admin/products/{id}` | Get a product |
+| `POST` | `/admin/products` | Create a product |
+| `PATCH` | `/admin/products/{id}` | Update a product (only the fields sent) |
+| `DELETE` | `/admin/products/{id}` | Archive a product |
+| `GET` | `/admin/products/{id}/releases` | List a product's releases |
+| `POST` | `/admin/products/{id}/releases` | Publish a release (optionally emailing owners) |
+| `GET` | `/admin/reviews` | List reviews |
+| `PATCH` | `/admin/reviews/{id}` | Publish or hide a review |
+| `PUT` | `/admin/reviews/{id}/reply` | Reply to a review |
+| `DELETE` | `/admin/reviews/{id}/reply` | Remove the store's reply |
+| `DELETE` | `/admin/reviews/{id}` | Delete a review |
+
+  </Accordion>
+  <Accordion title="licenses">
+
+| Method | Path | Summary |
+| --- | --- | --- |
+| `GET` | `/admin/licenses` | List licenses (`productId`, `status` = `unused` or `active`, `userId`) |
+| `POST` | `/admin/licenses` | Generate unused license keys |
+| `POST` | `/admin/licenses/grants` | Grant a product to an account |
+| `GET` | `/admin/licenses/{id}` | Get a license |
+| `POST` | `/admin/licenses/{id}/revoke` | Revoke a license |
+| `DELETE` | `/admin/licenses/{id}` | Delete a license |
+
+  </Accordion>
+  <Accordion title="files">
+
+| Method | Path | Summary |
+| --- | --- | --- |
+| `GET` | `/admin/files` | List files |
+| `GET` | `/admin/files/analytics` | Storage use and downloads |
+| `GET` | `/admin/files/{id}` | Get a file |
+| `PATCH` | `/admin/files/{id}` | Update a file |
+| `DELETE` | `/admin/files/{id}` | Delete a file |
+| `POST` | `/admin/files/bulk-delete` | Delete several files |
+
+  </Accordion>
+  <Accordion title="orders">
+
+| Method | Path | Summary |
+| --- | --- | --- |
+| `GET` | `/admin/purchases` | List orders (`status`, `userId`) |
+| `GET` | `/admin/purchases/{paymentId}/invoice` | An order's invoice |
+| `GET` | `/admin/purchases/{paymentId}/credit-note` | An order's credit note (the full refund's, or `number` for a partial refund's) |
+| `POST` | `/admin/purchases/{paymentId}/revoke` | Revoke an order's access after an outside refund |
+| `POST` | `/admin/purchases/{paymentId}/retry` | Retry a failed fulfillment |
+| `GET` | `/admin/subscriptions` | List subscriptions |
+| `POST` | `/admin/subscriptions/{id}/cancel` | Stop renewal at the period end |
+| `POST` | `/admin/subscriptions/{id}/resume` | Turn renewal back on |
+| `GET` | `/admin/analytics` | Sales analytics |
+| `GET` | `/admin/system/stats` | Store totals for the dashboard, including revenue |
+
+  </Accordion>
+  <Accordion title="marketing">
+
+| Method | Path | Summary |
+| --- | --- | --- |
+| `GET` | `/admin/coupons` | List discount codes |
+| `POST` | `/admin/coupons` | Create a discount code |
+| `GET` | `/admin/coupons/{id}` | Get a discount code |
+| `PATCH` | `/admin/coupons/{id}` | Update a discount code |
+| `DELETE` | `/admin/coupons/{id}` | Delete a discount code |
+| `GET` | `/admin/gift-cards` | List gift cards |
+| `POST` | `/admin/gift-cards` | Issue gift cards |
+| `PATCH` | `/admin/gift-cards/{id}` | Disable or re-enable a gift card |
+| `GET` | `/admin/affiliates` | Creators and their balances |
+| `GET` | `/admin/affiliates/commissions` | List commissions |
+| `GET` | `/admin/affiliates/candidates` | Find accounts to make creators |
+| `POST` | `/admin/affiliates/{userId}/payouts` | Record a payout of approved commissions |
+| `GET` | `/admin/resellers` | List resellers with their terms and keys |
+| `POST` | `/admin/resellers` | Make an account a reseller |
+| `PATCH` | `/admin/resellers/{id}` | Change a reseller's terms |
+| `DELETE` | `/admin/resellers/{id}` | Stop an account being a reseller (keys bought keep working) |
+
+  </Accordion>
+  <Accordion title="support">
+
+| Method | Path | Summary |
+| --- | --- | --- |
+| `GET` | `/admin/tickets` | List support tickets |
+| `GET` | `/admin/tickets/{id}` | Get a ticket and its messages |
+| `POST` | `/admin/tickets/{id}/messages` | Reply to a ticket (emails the customer) |
+| `POST` | `/admin/tickets/{id}/close` | Close a ticket |
+| `POST` | `/admin/tickets/{id}/reopen` | Reopen a ticket |
+
+  </Accordion>
+  <Accordion title="users">
+
+| Method | Path | Summary |
+| --- | --- | --- |
+| `GET` | `/admin/users` | List accounts (`search`, `role`, `banned`) |
+| `GET` | `/admin/users/{id}` | Get an account |
+| `POST` | `/admin/users/{id}/bindings/{type}/reset` | Clear an account's IP or HWID bindings (`type` = `ip` or `hwid`) |
+| `DELETE` | `/admin/users/{id}/devices/{deviceId}` | Remove a bound device |
+| `DELETE` | `/admin/users/{id}/products/{productId}/devices/{deviceId}` | Free one of a product's device slots or end a floating lease |
+| `PUT` | `/admin/users/{id}/permissions` | Set an admin's areas (owner session only: API keys get `API_KEY_NOT_ALLOWED`) |
+| `PUT` | `/admin/users/{id}/role` | Change an account's role (owner session only: API keys get `API_KEY_NOT_ALLOWED`) |
+| `POST` | `/admin/users/{id}/ban` | Ban an account |
+| `DELETE` | `/admin/users/{id}/ban` | Lift a ban |
+| `DELETE` | `/admin/users/{id}` | Delete an account |
+| `GET` | `/admin/credit/{userId}` | An account's store credit and its history |
+| `POST` | `/admin/credit/{userId}/adjust` | Add or remove store credit |
+
+  </Accordion>
+  <Accordion title="security">
+
+| Method | Path | Summary |
+| --- | --- | --- |
+| `GET` | `/admin/blacklist` | List blocked IPs and devices |
+| `POST` | `/admin/blacklist` | Block an IP or device |
+| `DELETE` | `/admin/blacklist/{id}` | Unblock an entry |
+
+  </Accordion>
+  <Accordion title="logs">
+
+| Method | Path | Summary |
+| --- | --- | --- |
+| `GET` | `/admin/system/logs` | List request logs |
+| `GET` | `/admin/system/logs/summary` | Request log summary |
+| `GET` | `/admin/audit` | List activity (audit trail) |
+
+  </Accordion>
+</Accordions>
+
+Paths are relative to `/api/v2`. Everything else under `/api/v2/admin` (store settings, API keys, webhooks) needs an owner session and answers API keys with `403 API_KEY_NOT_ALLOWED`.
+
+## OpenAPI
+
+`GET /api/v2/openapi.json` returns an OpenAPI 3.0.3 description of every endpoint above. It is public (it contains no store data) and may be cached for an hour.
+
+- `servers[0].url` is your API URL plus `/api/v2`.
+- The `apiKey` security scheme is HTTP bearer (`mbk_…`), applied to every operation.
+- Each operation is tagged by section (Products, Licenses, Files, Orders, Marketing, Support, Users, Security, System; the reseller endpoints are tagged Admin), states the area it needs in its description and in `x-moonbase-permission`, and carries the request body and query schemas the server validates.
+- Responses are described as the generic envelope (`ok`, `data`, `error`); `data` is not typed per endpoint.
+
+```bash
+curl -s https://your-moonbase-host/api/v2/openapi.json -o moonbase-openapi.json
+```
+
+<Tabs items={['Postman', 'Generate a client']} defaultIndex={0}>
+  <Tab>
+
+1. In Postman, choose **Import**, paste `https://your-moonbase-host/api/v2/openapi.json` (or drop the downloaded file) and import it as a collection.
+2. Open the collection's **Authorization** tab, choose **Bearer Token**, and set the token to your `mbk_…` key (preferably through a secret variable).
+3. Requests inherit the collection's authorization and server URL.
+
+  </Tab>
+  <Tab>
+
+Any OpenAPI 3.0 generator works. For example:
+
+```bash
+# Typed request/response helpers for TypeScript
+npx openapi-typescript https://your-moonbase-host/api/v2/openapi.json -o moonbase-admin.d.ts
+
+# A full client in another language
+npx @openapitools/openapi-generator-cli generate \
+  -i https://your-moonbase-host/api/v2/openapi.json \
+  -g python -o ./moonbase-admin-client
+```
+
+Request parameters and bodies are typed; response `data` is untyped, so describe the fields you use yourself.
+
+  </Tab>
+</Tabs>
+
+## Examples
+
+### Grant a product to a customer
+
+Find the account (`users` area), then grant the product (`licenses` area). The grant creates a license for the plan and activates it on the account, as if the customer had redeemed a key; it fires the `license.redeemed` [webhook](/docs/api/webhooks).
+
+<CodeBlockTabs defaultValue="curl">
+  <CodeBlockTabsList>
+    <CodeBlockTabsTrigger value="curl">cURL</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="javascript">JavaScript</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="python">Python</CodeBlockTabsTrigger>
+  </CodeBlockTabsList>
+  <CodeBlockTab value="curl">
+```bash
+API=https://your-moonbase-host/api/v2
+KEY=mbk_your_key
+
+# 1. Look the account up by username or email
+curl -s "$API/admin/users?search=alice&limit=5" -H "Authorization: Bearer $KEY"
+
+# 2. Grant the product (plan: daily, monthly, yearly or lifetime)
+curl -s -X POST "$API/admin/licenses/grants" \
+  -H "Authorization: Bearer $KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "userId": "665f1c2e9b1d4a0012ab34cd", "productId": "665f1c2e9b1d4a0012ab0001", "plan": "monthly" }'
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="javascript">
+```javascript
+const API = "https://your-moonbase-host/api/v2";
+const headers = { Authorization: `Bearer ${process.env.MOONBASE_API_KEY}`, "Content-Type": "application/json" };
+
+async function call(path, init = {}) {
+  const res = await fetch(`${API}${path}`, { ...init, headers });
+  const body = await res.json();
+  if (!body.ok) throw new Error(`${body.error.code}: ${body.error.message}`);
+  return body.data;
+}
+
+const { items } = await call(`/admin/users?search=${encodeURIComponent("alice")}&limit=5`);
+const user = items.find((entry) => entry.username === "alice");
+
+const grant = await call("/admin/licenses/grants", {
+  method: "POST",
+  body: JSON.stringify({ userId: user.id, productId: "665f1c2e9b1d4a0012ab0001", plan: "monthly" }),
+});
+console.log(grant.license.key, "active until", grant.expiresAt ?? "forever");
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="python">
+```python
+import os
+import requests
+
+API = "https://your-moonbase-host/api/v2"
+session = requests.Session()
+session.headers["Authorization"] = f"Bearer {os.environ['MOONBASE_API_KEY']}"
+
+
+def call(method: str, path: str, **kwargs):
+    body = session.request(method, f"{API}{path}", timeout=15, **kwargs).json()
+    if not body["ok"]:
+        raise RuntimeError(f"{body['error']['code']}: {body['error']['message']}")
+    return body["data"]
+
+
+users = call("GET", "/admin/users", params={"search": "alice", "limit": 5})["items"]
+user = next(entry for entry in users if entry["username"] == "alice")
+
+grant = call("POST", "/admin/licenses/grants", json={
+    "userId": user["id"],
+    "productId": "665f1c2e9b1d4a0012ab0001",
+    "plan": "monthly",
+})
+print(grant["license"]["key"], "active until", grant["expiresAt"] or "forever")
+```
+  </CodeBlockTab>
+</CodeBlockTabs>
+
+```json title="Response (201)"
+{
+  "ok": true,
+  "data": {
+    "license": {
+      "id": "6671a9f04e2b7c0012cd5678",
+      "key": "8F2A-41C9-D0B7-3E55-A1F0",
+      "productId": "665f1c2e9b1d4a0012ab0001",
+      "productName": "Pro Edition",
+      "plan": "monthly",
+      "status": "active",
+      "userId": "665f1c2e9b1d4a0012ab34cd",
+      "activatedAt": "2026-10-26T10:00:00.000Z",
+      "createdAt": "2026-10-26T10:00:00.000Z"
+    },
+    "expiresAt": "2026-11-26T10:00:00.000Z"
+  }
+}
+```
+
+`expiresAt` is `null` for lifetime access. A plan the product is not sold with fails with `400 PLAN_NOT_AVAILABLE`.
+
+### Generate keys to hand out
+
+`POST /admin/licenses` with `{ "productId", "plan", "quantity" }` (quantity 1–100, default 1) returns `201` and an array of unused licenses, each with its `key`. Customers redeem a key from their account (`POST /api/v2/licenses/redeem`).
+
+### Look up a customer's orders
+
+`GET /admin/purchases` (`orders` area) filters by `userId` and `status` (`pending`, `processing`, `completed`, `failed`, `refunded`, `disputed`):
+
+```bash
+curl -s "https://your-moonbase-host/api/v2/admin/purchases?userId=665f1c2e9b1d4a0012ab34cd&status=completed" \
+  -H "Authorization: Bearer mbk_your_key"
+```
+
+Each item has `paymentId`, `provider`, `status`, `items` (`productId`, `productName`, `plan`, `quantity`, `unitPrice`, `discount`), `subtotal`, `discount`, `storeCredit`, `total`, `tax`, `currency`, `invoiceNumber`, `refundedAmount`, `creditNotes`, `subscriptionId`, `renewal`, `userId`, `username`, `createdAt` and `fulfilledAt`. Use `paymentId` with `/admin/purchases/{paymentId}/invoice` or `/revoke`.
+
+### Revoke a license
+
+`POST /admin/licenses/{id}/revoke` removes the product from the account that redeemed it and fires `license.revoked`. A license that is not in use fails with `400 LICENSE_NOT_ACTIVE`.
+
+## Activity log
+
+Everything a key changes is recorded in Dashboard → Activity (and `GET /admin/audit`, `logs` area) with source `api`, the owner as actor and the key's name in the details.

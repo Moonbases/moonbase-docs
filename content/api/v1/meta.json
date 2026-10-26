@@ -1,0 +1,11 @@
+{
+  "title": "Legacy v1 API",
+  "pages": [
+    "index",
+    "authentication",
+    "user-info",
+    "files",
+    "reference",
+    "examples"
+  ]
+}

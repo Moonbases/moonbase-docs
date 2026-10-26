@@ -1,0 +1,376 @@
+---
+title: Sign-in examples (v1)
+description: POST /api/auth/user in twelve languages, reading the JWT from the v1 envelope.
+---
+
+<Callout type="info" title="Legacy API">
+  These requests sign in through the v1 loader endpoint and read `status_data.jwt`. Replace `https://your-moonbase-host` with your API URL. For new loaders, the [SDKs](/docs/api/sdks) do this (and verify a signed license) for you.
+</Callout>
+
+Every example sends `{ username, password, hwid }`, checks `status_overview`, and returns the JWT or fails with `status_message` (for example `INVALID_PASSWORD`, `HWID_LIMIT_EXCEEDED` or `TOO_MANY_ATTEMPTS`; see [Sign-in](/docs/api/v1/authentication#status-codes)).
+
+<CodeBlockTabs defaultValue="javascript">
+  <CodeBlockTabsList>
+    <CodeBlockTabsTrigger value="javascript">JavaScript</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="typescript">TypeScript</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="python">Python</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="java">Java</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="csharp">C#</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="cpp">C++</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="ruby">Ruby</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="go">Go</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="rust">Rust</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="php">PHP</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="swift">Swift</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="lua">Lua</CodeBlockTabsTrigger>
+  </CodeBlockTabsList>
+  <CodeBlockTab value="javascript">
+```javascript
+async function signIn(username, password, hwid) {
+  const res = await fetch("https://your-moonbase-host/api/auth/user", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ username, password, hwid }),
+  });
+  const body = await res.json();
+  if (body.status_overview !== "success") throw new Error(body.status_message);
+  return body.status_data.jwt;
+}
+
+const jwt = await signIn("YOUR_USERNAME", "YOUR_PASSWORD", "YOUR_HWID");
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="typescript">
+```typescript
+type V1Response<T> = {
+  status_message: string;
+  status_overview: "success" | "failed";
+  status_code: number;
+  status_data?: T;
+};
+
+type SignInData = { user: string; jwt: string };
+
+export async function signIn(username: string, password: string, hwid?: string): Promise<string> {
+  const res = await fetch("https://your-moonbase-host/api/auth/user", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ username, password, hwid }),
+  });
+  const body = (await res.json()) as V1Response<SignInData>;
+  if (body.status_overview !== "success" || !body.status_data) {
+    throw new Error(`${body.status_code} ${body.status_message}`);
+  }
+  return body.status_data.jwt;
+}
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="python">
+```python
+from typing import Optional
+
+import requests
+
+
+def sign_in(username: str, password: str, hwid: Optional[str] = None) -> str:
+    payload = {"username": username, "password": password}
+    if hwid:
+        payload["hwid"] = hwid
+    body = requests.post("https://your-moonbase-host/api/auth/user", json=payload, timeout=10).json()
+    if body["status_overview"] != "success":
+        raise RuntimeError(f"{body['status_code']} {body['status_message']}")
+    return body["status_data"]["jwt"]
+
+
+jwt = sign_in("YOUR_USERNAME", "YOUR_PASSWORD", "YOUR_HWID")
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="java">
+```java
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.Map;
+
+public class MoonbaseSignIn {
+    private static final HttpClient CLIENT = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+    private static final ObjectMapper JSON = new ObjectMapper();
+
+    public static String signIn(String username, String password, String hwid) throws Exception {
+        String payload = JSON.writeValueAsString(Map.of("username", username, "password", password, "hwid", hwid));
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://your-moonbase-host/api/auth/user"))
+            .header("Content-Type", "application/json")
+            .timeout(Duration.ofSeconds(30))
+            .POST(HttpRequest.BodyPublishers.ofString(payload))
+            .build();
+
+        JsonNode body = JSON.readTree(CLIENT.send(request, HttpResponse.BodyHandlers.ofString()).body());
+        if (!"success".equals(body.path("status_overview").asText())) {
+            throw new IllegalStateException(body.path("status_message").asText());
+        }
+        return body.path("status_data").path("jwt").asText();
+    }
+}
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="csharp">
+```csharp
+using System;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Threading.Tasks;
+
+public static class MoonbaseSignIn
+{
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
+
+    public static async Task<string> SignInAsync(string username, string password, string hwid)
+    {
+        var response = await Http.PostAsJsonAsync("https://your-moonbase-host/api/auth/user",
+            new { username, password, hwid });
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = body.RootElement;
+        if (root.GetProperty("status_overview").GetString() != "success")
+            throw new InvalidOperationException(root.GetProperty("status_message").GetString());
+        return root.GetProperty("status_data").GetProperty("jwt").GetString()!;
+    }
+}
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="cpp">
+```cpp
+// libcurl + nlohmann/json
+#include <curl/curl.h>
+#include <nlohmann/json.hpp>
+#include <stdexcept>
+#include <string>
+
+static size_t collect(char* data, size_t size, size_t count, void* out) {
+  static_cast<std::string*>(out)->append(data, size * count);
+  return size * count;
+}
+
+std::string signIn(const std::string& username, const std::string& password, const std::string& hwid) {
+  const std::string payload = nlohmann::json{{"username", username}, {"password", password}, {"hwid", hwid}}.dump();
+  std::string response;
+
+  CURL* curl = curl_easy_init();
+  if (!curl) throw std::runtime_error("curl_easy_init failed");
+  curl_slist* headers = curl_slist_append(nullptr, "Content-Type: application/json");
+  curl_easy_setopt(curl, CURLOPT_URL, "https://your-moonbase-host/api/auth/user");
+  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.c_str());
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, collect);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+  curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+  const CURLcode result = curl_easy_perform(curl);
+  curl_slist_free_all(headers);
+  curl_easy_cleanup(curl);
+  if (result != CURLE_OK) throw std::runtime_error(curl_easy_strerror(result));
+
+  const auto body = nlohmann::json::parse(response);
+  if (body.value("status_overview", "") != "success") throw std::runtime_error(body.value("status_message", "REQUEST_FAILED"));
+  return body["status_data"]["jwt"].get<std::string>();
+}
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="ruby">
+```ruby
+require "json"
+require "net/http"
+require "uri"
+
+def sign_in(username, password, hwid = nil)
+  uri = URI("https://your-moonbase-host/api/auth/user")
+  payload = { username: username, password: password, hwid: hwid }.compact
+  response = Net::HTTP.post(uri, payload.to_json, "Content-Type" => "application/json")
+  body = JSON.parse(response.body)
+  raise "#{body['status_code']} #{body['status_message']}" unless body["status_overview"] == "success"
+
+  body["status_data"]["jwt"]
+end
+
+jwt = sign_in("YOUR_USERNAME", "YOUR_PASSWORD", "YOUR_HWID")
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="go">
+```go
+package moonbase
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"time"
+)
+
+type v1Response struct {
+	StatusMessage  string          `json:"status_message"`
+	StatusOverview string          `json:"status_overview"`
+	StatusCode     int             `json:"status_code"`
+	StatusData     json.RawMessage `json:"status_data"`
+}
+
+var client = &http.Client{Timeout: 30 * time.Second}
+
+func SignIn(username, password, hwid string) (string, error) {
+	payload, _ := json.Marshal(map[string]string{"username": username, "password": password, "hwid": hwid})
+	resp, err := client.Post("https://your-moonbase-host/api/auth/user", "application/json", bytes.NewReader(payload))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var body v1Response
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return "", err
+	}
+	if body.StatusOverview != "success" {
+		return "", fmt.Errorf("%d %s", body.StatusCode, body.StatusMessage)
+	}
+	var data struct {
+		JWT string `json:"jwt"`
+	}
+	if err := json.Unmarshal(body.StatusData, &data); err != nil {
+		return "", err
+	}
+	return data.JWT, nil
+}
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="rust">
+```rust
+// Cargo.toml: reqwest = { version = "0.12", features = ["json"] }, serde_json = "1", tokio = { version = "1", features = ["full"] }
+use serde_json::{json, Value};
+
+async fn sign_in(username: &str, password: &str, hwid: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let body: Value = reqwest::Client::new()
+        .post("https://your-moonbase-host/api/auth/user")
+        .json(&json!({ "username": username, "password": password, "hwid": hwid }))
+        .timeout(std::time::Duration::from_secs(30))
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    if body["status_overview"] != "success" {
+        return Err(format!("{} {}", body["status_code"], body["status_message"]).into());
+    }
+    Ok(body["status_data"]["jwt"].as_str().unwrap_or_default().to_string())
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let jwt = sign_in("YOUR_USERNAME", "YOUR_PASSWORD", "YOUR_HWID").await?;
+    println!("{jwt}");
+    Ok(())
+}
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="php">
+```php
+<?php
+function moonbase_sign_in(string $username, string $password, ?string $hwid = null): string
+{
+    $payload = ['username' => $username, 'password' => $password];
+    if ($hwid !== null) {
+        $payload['hwid'] = $hwid;
+    }
+
+    $ch = curl_init('https://your-moonbase-host/api/auth/user');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_POSTFIELDS => json_encode($payload),
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 30,
+    ]);
+    $raw = curl_exec($ch);
+    if ($raw === false) {
+        throw new RuntimeException(curl_error($ch));
+    }
+    curl_close($ch);
+
+    $body = json_decode($raw, true);
+    if (($body['status_overview'] ?? '') !== 'success') {
+        throw new RuntimeException($body['status_message'] ?? 'REQUEST_FAILED');
+    }
+    return $body['status_data']['jwt'];
+}
+
+$jwt = moonbase_sign_in('YOUR_USERNAME', 'YOUR_PASSWORD', 'YOUR_HWID');
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="swift">
+```swift
+import Foundation
+
+struct V1Response<T: Decodable>: Decodable {
+    let status_message: String
+    let status_overview: String
+    let status_code: Int
+    let status_data: T?
+}
+
+struct SignInData: Decodable {
+    let user: String
+    let jwt: String
+}
+
+enum MoonbaseError: Error { case failed(String) }
+
+func signIn(username: String, password: String, hwid: String? = nil) async throws -> String {
+    var request = URLRequest(url: URL(string: "https://your-moonbase-host/api/auth/user")!)
+    request.httpMethod = "POST"
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.timeoutInterval = 30
+    var payload = ["username": username, "password": password]
+    if let hwid { payload["hwid"] = hwid }
+    request.httpBody = try JSONEncoder().encode(payload)
+
+    let (data, _) = try await URLSession.shared.data(for: request)
+    let body = try JSONDecoder().decode(V1Response<SignInData>.self, from: data)
+    guard body.status_overview == "success", let result = body.status_data else {
+        throw MoonbaseError.failed(body.status_message)
+    }
+    return result.jwt
+}
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="lua">
+```lua
+-- LuaSocket + LuaSec (HTTPS) + dkjson
+local https = require("ssl.https")
+local ltn12 = require("ltn12")
+local json = require("dkjson")
+
+local function sign_in(username, password, hwid)
+  local payload = json.encode({ username = username, password = password, hwid = hwid })
+  local chunks = {}
+  local ok, code = https.request({
+    url = "https://your-moonbase-host/api/auth/user",
+    method = "POST",
+    headers = { ["Content-Type"] = "application/json", ["Content-Length"] = tostring(#payload) },
+    source = ltn12.source.string(payload),
+    sink = ltn12.sink.table(chunks),
+  })
+  if not ok then error("request failed: " .. tostring(code)) end
+
+  local body = json.decode(table.concat(chunks))
+  if not body or body.status_overview ~= "success" then
+    error(body and body.status_message or ("HTTP " .. tostring(code)))
+  end
+  return body.status_data.jwt
+end
+
+local jwt = sign_in("YOUR_USERNAME", "YOUR_PASSWORD", "YOUR_HWID")
+```
+  </CodeBlockTab>
+</CodeBlockTabs>

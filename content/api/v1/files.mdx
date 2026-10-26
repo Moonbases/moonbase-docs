@@ -1,0 +1,125 @@
+---
+title: User files (v1)
+description: Download a product file by name with GET /api/user/files/:file, with resumable binary responses.
+---
+
+<Callout type="warning" title="Binary response">
+  On success this endpoint returns the file itself, not JSON. Handle it as a stream; errors still come back as JSON.
+</Callout>
+
+## Request flow
+
+<Steps>
+  <Step>Sign in with [`POST /api/auth/user`](/docs/api/v1/authentication) to get a JWT.</Step>
+  <Step>Optionally list a product's files with [`POST /api/file/list-by-product`](/docs/api/v1/reference) to learn their names.</Step>
+  <Step>Call `GET /api/user/files/:file` with the file name and save the body to disk.</Step>
+</Steps>
+
+The account must currently own the product the file belongs to (admins with the `files` area can download every file). File names are unique in a store.
+
+## Parameters and headers
+
+<TypeTable
+  type={{
+    file: { type: 'string', description: 'Path parameter: the file name as set in the dashboard (URL-encode it).', required: true },
+    Authorization: { type: 'string', description: 'Public app key.', required: true },
+    Token: { type: 'string', description: 'JWT from POST /api/auth/user.', required: true },
+    Range: { type: 'string', description: 'Optional byte range to resume a download, e.g. bytes=1048576-.', required: false },
+  }}
+/>
+
+<Tabs items={['Request', 'Response headers']} defaultIndex={0}>
+  <Tab>
+```http
+GET /api/user/files/loader.zip
+Authorization: <PUBLIC_API_KEY>
+Token: <jwt_token>
+```
+  </Tab>
+  <Tab>
+```text
+HTTP/1.1 200 OK
+Content-Type: application/zip
+Content-Length: 18350212
+Content-Disposition: attachment; filename="loader.zip"; filename*=UTF-8''loader.zip
+Accept-Ranges: bytes
+ETag: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+X-Checksum-SHA256: 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08
+Digest: sha-256=n4bQgYhMfWWaL+qgxVrQFaO/TxsrC4Is0V1sFbDwCgg=
+Last-Modified: Mon, 26 Oct 2026 09:00:00 GMT
+Cache-Control: private, no-store, no-transform
+```
+  </Tab>
+</Tabs>
+
+- `Content-Type` is the type recorded at upload (`application/octet-stream` when unknown).
+- `X-Checksum-SHA256` and `Digest` carry the SHA-256 taken at upload; files uploaded before checksums were SHA-256 send `Content-MD5` instead, and files without a checksum yet send a weak `ETag` and neither header. Verify the checksum after downloading.
+- Responses are never compressed (`no-transform`), so `Content-Length` is always the real size.
+- With a valid `Range` the answer is `206 Partial Content` with `Content-Range`; send `If-Range` with the `ETag` to resume safely. An unsatisfiable range answers `416` with `Content-Range: bytes */<size>`.
+
+## Status codes
+
+| Status | `status_message` | When |
+| --- | --- | --- |
+| 200 / 206 | — | The file (or the requested range) |
+| 400 | `FAILED_AUTHENTICATION` | `Authorization` or `Token` missing |
+| 401 | `AUTHENTICATION_FAILED`, `INVALID_TOKEN`, `TOKEN_REVOKED`, `INVALID_USER` | See [Errors](/docs/api/errors) |
+| 403 | `BANNED`, `BLACKLISTED` | Account banned or IP blocked |
+| 404 | `FILE_NOT_FOUND` | No file with this name that the account may download (also when it doesn't own the product) |
+| 404 | `FILE_NOT_FOUND_ON_DISK` | The record exists but the stored file is missing on the server |
+| 416 | — | `Range` outside the file |
+| 429 | `TOO_MANY_REQUESTS` | General per-IP budget exceeded |
+| 500 | `FILE_INTEGRITY_ERROR` | The stored file no longer matches its upload; the store owner must re-upload it |
+
+## Example request
+
+<CodeBlockTabs defaultValue="curl">
+  <CodeBlockTabsList>
+    <CodeBlockTabsTrigger value="curl">cURL</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="javascript">Node.js</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="python">Python</CodeBlockTabsTrigger>
+  </CodeBlockTabsList>
+  <CodeBlockTab value="curl">
+```bash
+# -C - resumes a partial download
+curl -f -C - "https://your-moonbase-host/api/user/files/loader.zip" \
+  -H "Authorization: <PUBLIC_API_KEY>" \
+  -H "Token: <jwt_token>" \
+  -o loader.zip
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="javascript">
+```javascript
+import { createWriteStream } from "node:fs";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+
+const res = await fetch(`https://your-moonbase-host/api/user/files/${encodeURIComponent("loader.zip")}`, {
+  headers: { Authorization: "<PUBLIC_API_KEY>", Token: "<jwt_token>" },
+});
+if (!res.ok) throw new Error((await res.json()).status_message);
+await pipeline(Readable.fromWeb(res.body), createWriteStream("loader.zip"));
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="python">
+```python
+import requests
+
+with requests.get(
+    "https://your-moonbase-host/api/user/files/loader.zip",
+    headers={"Authorization": "<PUBLIC_API_KEY>", "Token": "<jwt_token>"},
+    stream=True,
+    timeout=30,
+) as res:
+    if res.status_code != 200:
+        raise RuntimeError(res.json()["status_message"])
+    with open("loader.zip", "wb") as handle:
+        for chunk in res.iter_content(chunk_size=1 << 20):
+            handle.write(chunk)
+```
+  </CodeBlockTab>
+</CodeBlockTabs>
+
+## Download links
+
+To hand a download to a browser or another process without the JWT, create a short-lived link with [`POST /api/file/create-link`](/docs/api/v1/reference) (`5m`, `15m` or `1h`). The link (`/api/file/:id?ticket=…`) needs no headers and checks the account's access again when it is used. The v2 equivalent is `POST /api/v2/files/:id/link`.

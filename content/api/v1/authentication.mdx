@@ -1,0 +1,133 @@
+---
+title: Sign-in (v1)
+description: Exchange a username and password for a JWT with the legacy loader endpoint POST /api/auth/user.
+---
+
+<Callout type="info" title="Legacy endpoint">
+  This is the sign-in used by loaders built for Moonbase 1.x. It still works unchanged in 2.0. New loaders should use [`POST /api/v2/client/session`](/docs/api/client-api#signing-in), which also returns a signed license token.
+</Callout>
+
+## Login flow
+
+<Steps>
+  <Step>Send the username, password and (optionally) the hardware ID to `POST /api/auth/user`. No app key is needed for this call.</Step>
+  <Step>Store the JWT from `status_data.jwt`. It is valid for **1 day**.</Step>
+  <Step>Send `Authorization: <public app key>` and `Token: <jwt>` on user routes such as [`/api/user/info`](/docs/api/v1/user-info).</Step>
+  <Step>When the JWT expires (`401 INVALID_TOKEN`), sign in again.</Step>
+</Steps>
+
+## Request body
+
+<TypeTable
+  type={{
+    username: { type: 'string', description: 'Account username (exact match, not the email). Up to 128 characters.', required: true },
+    password: { type: 'string', description: 'Account password. Up to 1024 characters.', required: true },
+    hwid: { type: 'string', description: 'Hardware ID to bind, up to 4096 characters. Omit it to sign in without binding a device.', required: false },
+  }}
+/>
+
+<Tabs items={['Request', 'Response']} defaultIndex={0}>
+  <Tab>
+```json
+{
+  "username": "your_username",
+  "password": "your_password",
+  "hwid": "optional_hwid"
+}
+```
+  </Tab>
+  <Tab>
+```json
+{
+  "status_message": "USER_LOGGED_IN",
+  "status_overview": "success",
+  "status_code": 200,
+  "status_data": {
+    "user": "your_username",
+    "jwt": "<token>"
+  }
+}
+```
+  </Tab>
+</Tabs>
+
+## What the server checks
+
+1. The password. Unknown usernames and wrong passwords are reported separately (see below).
+2. Whether the account is banned (only after a correct password).
+3. The request IP: a new IP is added to the account, within the store's IP limit (3 by default).
+4. The hardware ID, when sent: a new one is bound to the account within its device limit (the store default, 2, raised by owned products that allow more). A blocked IP or hardware ID is refused.
+
+New IPs and devices trigger a security email to the customer, and a blocked attempt over the limit sends a notice.
+
+## Status codes
+
+| Status | `status_message` | When |
+| --- | --- | --- |
+| 200 | `USER_LOGGED_IN` | Signed in |
+| 400 | `INVALID_REQUEST` | Missing username or password, or `hwid` is not a string or is longer than 4096 characters |
+| 400 | `INVALID_PASSWORD` | Wrong password |
+| 400 | `INVALID_JSON` | Malformed JSON body |
+| 401 | `HWID_LIMIT_EXCEEDED` | The account already uses its maximum number of devices, or this device is past a lowered limit |
+| 401 | `IP_LIMIT_EXCEEDED` | The account already uses its maximum number of networks |
+| 403 | `BANNED` | Account banned; `status_data` has `ban_reason` and `ban_date` |
+| 403 | `BLACKLISTED` | The IP or hardware ID is blocked |
+| 406 | `INVALID_USER` | No account with this username |
+| 409 | `SIGN_IN_CONFLICT` | Too many simultaneous sign-ins for one account; retry |
+| 429 | `TOO_MANY_ATTEMPTS` | 20 failed sign-ins in 15 minutes from this IP, or for this username |
+| 429 | `TOO_MANY_REQUESTS` | General per-IP budget (300 requests / 15 minutes) exceeded |
+
+## Example request
+
+<CodeBlockTabs defaultValue="curl">
+  <CodeBlockTabsList>
+    <CodeBlockTabsTrigger value="curl">cURL</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="javascript">JavaScript</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="python">Python</CodeBlockTabsTrigger>
+  </CodeBlockTabsList>
+  <CodeBlockTab value="curl">
+```bash
+curl -X POST "https://your-moonbase-host/api/auth/user" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "your_username",
+    "password": "your_password",
+    "hwid": "optional_hwid"
+  }'
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="javascript">
+```javascript
+const res = await fetch("https://your-moonbase-host/api/auth/user", {
+  method: "POST",
+  headers: { "Content-Type": "application/json", Accept: "application/json" },
+  body: JSON.stringify({
+    username: "your_username",
+    password: "your_password",
+    hwid: "optional_hwid",
+  }),
+});
+
+const body = await res.json();
+if (body.status_overview !== "success") throw new Error(body.status_message);
+const jwt = body.status_data.jwt;
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="python">
+```python
+import requests
+
+res = requests.post(
+    "https://your-moonbase-host/api/auth/user",
+    json={"username": "your_username", "password": "your_password", "hwid": "optional_hwid"},
+    timeout=10,
+)
+body = res.json()
+if body["status_overview"] != "success":
+    raise RuntimeError(body["status_message"])
+jwt = body["status_data"]["jwt"]
+```
+  </CodeBlockTab>
+</CodeBlockTabs>
+
+More languages are on the [examples](/docs/api/v1/examples/authentication) page.

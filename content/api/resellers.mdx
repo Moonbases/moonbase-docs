@@ -1,0 +1,262 @@
+---
+title: Reseller API
+description: Reseller API keys, claiming wholesale license keys idempotently, key states and CSV export.
+---
+
+Resellers are accounts the store approved to buy license keys in bulk at a wholesale discount. The keys they buy stay unredeemed and grant the reseller nothing; each of the reseller's customers redeems one like any license key. The reseller API lets a reseller's own shop or bot hand those keys out automatically.
+
+<Callout type="info" title="Who sets this up">
+  The store owner (or an admin with the `marketing` area) makes an account a reseller and sets its discount and minimum order in Dashboard → Resellers, or with `/api/v2/admin/resellers` in the [admin API](/docs/api/admin-api). The reseller buys keys on the **Wholesale** page of their dashboard: buying needs the browser for payment and is not available with an API key.
+</Callout>
+
+## Key states
+
+| State | Meaning | Becomes |
+| --- | --- | --- |
+| `available` | Bought, not given to anyone yet | `handedOut` when claimed through the API, exported to CSV, or marked by hand |
+| `handedOut` | Given to a customer (`handedOutAt` is set) but not redeemed yet | `available` again if unmarked by hand; `redeemed` when a customer redeems it |
+| `redeemed` | A customer redeemed it | Final |
+
+The API only hands out `available` keys, so a key is never given out twice. If the store refunds a wholesale order and revokes access on refunds, that order's keys are removed, redeemed or not.
+
+## Reseller API keys
+
+| | |
+| --- | --- |
+| Format | `mbr_` followed by 32 URL-safe characters |
+| Header | `Authorization: Bearer mbr_…` (no `Token`) |
+| Works on | `/api/v2/reseller`, `/api/v2/reseller/keys…` |
+| Limit | 5 active keys per reseller (`409 API_KEY_LIMIT`) |
+| Expiry | None; revoke to stop a key |
+| Stops working when | Revoked, the reseller is paused or removed, or the account is banned: `401 INVALID_API_KEY` |
+
+Resellers create and revoke keys on their Wholesale page. Managing keys needs a signed-in session (public app key + `Token`), so a key cannot create more keys:
+
+| Method | Path | Result |
+| --- | --- | --- |
+| `GET` | `/api/v2/reseller/api-keys` | Active keys: `id`, `name`, `prefix`, `createdAt`, `lastUsedAt` |
+| `POST` | `/api/v2/reseller/api-keys` | `{ "name": "Shop delivery" }` (1–60 characters) → `201`, the same fields plus `secret`, shown once |
+| `DELETE` | `/api/v2/reseller/api-keys/:id` | `{ revoked: true }` |
+
+Reseller keys are refused by every other endpoint with `403 API_KEY_NOT_ALLOWED`, and store API keys (`mbk_`) are refused here the same way. Accounts that are not active resellers get `403 NOT_A_RESELLER`.
+
+## Endpoints
+
+All of these accept a reseller API key or a signed-in session of the reseller.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/v2/reseller` | Terms, wholesale prices and key counts |
+| `GET` | `/api/v2/reseller/keys` | The reseller's keys, newest first |
+| `POST` | `/api/v2/reseller/keys/claim` | Hand out the oldest available keys |
+| `GET` | `/api/v2/reseller/keys/export` | Export every available key as CSV (marks them handed out) |
+| `PATCH` | `/api/v2/reseller/keys/:id` | Mark one key handed out, or available again |
+
+### Overview
+
+`GET /api/v2/reseller` returns the wholesale terms and what is left:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "discountPercent": 30,
+    "minQuantity": 5,
+    "currency": "USD",
+    "products": [
+      {
+        "id": "665f1c2e9b1d4a0012ab0001",
+        "name": "Pro Edition",
+        "slug": "pro-edition",
+        "image": null,
+        "prices": [{ "plan": "lifetime", "price": 20, "wholesalePrice": 14 }]
+      }
+    ],
+    "keys": { "bought": 8, "redeemed": 0, "handedOut": 2, "available": 6 }
+  }
+}
+```
+
+Gift cards and bundles are not sold wholesale and are not listed.
+
+### Listing keys
+
+`GET /api/v2/reseller/keys` takes `status` (`all`, `available`, `handedOut`, `redeemed`; default `all`), `productId`, `page` and `limit` (1–200, default 50), and returns a paginated list of keys:
+
+<TypeTable
+  type={{
+    id: { type: 'string', description: 'Key record ID, used by PATCH.', required: true },
+    key: { type: 'string', description: 'The license key to give the customer.', required: true },
+    productId: { type: 'string', description: 'Product ID.', required: true },
+    productName: { type: 'string | null', description: 'Product name.', required: true },
+    plan: { type: '"daily" | "monthly" | "yearly" | "lifetime"', description: 'Plan the key grants.', required: true },
+    redeemedAt: { type: 'string | null', description: 'When a customer redeemed it. Who redeemed it stays private to the store.', required: true },
+    handedOutAt: { type: 'string | null', description: 'When it was handed out; null while available.', required: true },
+    reference: { type: 'string | null', description: 'Your reference for the hand-out (the claim reference, or "CSV export …").', required: true },
+    orderId: { type: 'string', description: 'The wholesale order the key came from.', required: true },
+    createdAt: { type: 'string | null', description: 'When the key was bought.', required: true },
+  }}
+/>
+
+## Claiming keys
+
+`POST /api/v2/reseller/keys/claim` hands out the **oldest** available keys of a product, marks them handed out and returns them. Call it from your shop when a customer pays.
+
+<TypeTable
+  type={{
+    productId: { type: 'string', description: 'Product to hand out (24 hex characters).', required: true },
+    plan: { type: '"daily" | "monthly" | "yearly" | "lifetime"', description: 'Only keys of this plan. Without it, the oldest keys of any plan.', required: false },
+    quantity: { type: 'number', description: 'Integer from 1 to 50.', default: '1' },
+    reference: { type: 'string', description: 'Your own ID for this hand-out, such as your order number (1–120 characters). Makes the call idempotent.', required: false },
+  }}
+/>
+
+<Tabs items={['Request', 'Response (201)']} defaultIndex={0}>
+  <Tab>
+```bash
+curl -X POST "https://your-moonbase-host/api/v2/reseller/keys/claim" \
+  -H "Authorization: Bearer mbr_your_key" \
+  -H "Content-Type: application/json" \
+  -d '{ "productId": "665f1c2e9b1d4a0012ab0001", "plan": "lifetime", "quantity": 2, "reference": "order-1001" }'
+```
+  </Tab>
+  <Tab>
+```json
+{
+  "ok": true,
+  "data": {
+    "reference": "order-1001",
+    "created": true,
+    "keys": [
+      {
+        "id": "6671a9f04e2b7c0012cd0001",
+        "key": "8F2A-41C9-D0B7-3E55-A1F0",
+        "productId": "665f1c2e9b1d4a0012ab0001",
+        "productName": "Pro Edition",
+        "plan": "lifetime",
+        "redeemedAt": null,
+        "handedOutAt": "2026-10-26T10:00:00.000Z",
+        "reference": "order-1001",
+        "orderId": "cs_live_a1B2c3",
+        "createdAt": "2026-10-20T08:30:00.000Z"
+      }
+    ]
+  }
+}
+```
+  </Tab>
+</Tabs>
+
+### Idempotency
+
+Always send a `reference` when you might retry (timeouts, crashes, queue redelivery):
+
+- The first call with a reference hands out keys and answers **`201`** with `created: true`.
+- Any later call with the same reference answers **`200`** with `created: false` and the **same keys**; nothing new is taken, whatever `quantity` or `productId` it sends.
+- If a call with the same reference is still running, the retry gets `409 CLAIM_IN_PROGRESS`: wait a moment and retry.
+- A claim that fails with `NOT_ENOUGH_KEYS` keeps nothing and frees its reference, so the same reference can be used again once more keys are bought.
+
+Without a reference, every call hands out new keys. Concurrent claims never receive the same key.
+
+### All or nothing
+
+When fewer matching keys are available than `quantity`, nothing is handed out and the call fails with:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "NOT_ENOUGH_KEYS",
+    "message": "Only 3 matching keys are available. Buy more on your wholesale page.",
+    "details": { "available": 3, "requested": 10 }
+  }
+}
+```
+
+### Errors
+
+| Status | Code | When |
+| --- | --- | --- |
+| 401 | `INVALID_API_KEY` | Unknown or revoked key, or the reseller is paused, removed or banned |
+| 403 | `API_KEY_NOT_ALLOWED` | A store API key (`mbk_`) was sent |
+| 403 | `NOT_A_RESELLER` | Session of an account that is not an active reseller |
+| 409 | `NOT_ENOUGH_KEYS` | Not enough available keys for this product/plan (`details.available`, `details.requested`) |
+| 409 | `CLAIM_IN_PROGRESS` | Another request with this reference is still running |
+| 422 | `VALIDATION_FAILED` | Invalid body |
+
+### Example: deliver keys from your shop
+
+<CodeBlockTabs defaultValue="javascript">
+  <CodeBlockTabsList>
+    <CodeBlockTabsTrigger value="javascript">JavaScript</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="python">Python</CodeBlockTabsTrigger>
+  </CodeBlockTabsList>
+  <CodeBlockTab value="javascript">
+```javascript
+const API = "https://your-moonbase-host/api/v2";
+
+/** Returns the keys for one of your orders; safe to call again for the same order. */
+export async function keysForOrder(orderId, productId, quantity) {
+  for (let attempt = 1; ; attempt++) {
+    const res = await fetch(`${API}/reseller/keys/claim`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${process.env.MOONBASE_RESELLER_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ productId, quantity, reference: `order-${orderId}` }),
+    });
+    const body = await res.json();
+    if (body.ok) return body.data.keys.map((entry) => entry.key);
+    if (body.error.code === "CLAIM_IN_PROGRESS" && attempt < 5) {
+      await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+      continue;
+    }
+    throw new Error(`${body.error.code}: ${body.error.message}`);
+  }
+}
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="python">
+```python
+import os
+import time
+import requests
+
+API = "https://your-moonbase-host/api/v2"
+
+
+def keys_for_order(order_id: str, product_id: str, quantity: int) -> list[str]:
+    """Returns the keys for one of your orders; safe to call again for the same order."""
+    for attempt in range(1, 6):
+        body = requests.post(
+            f"{API}/reseller/keys/claim",
+            headers={"Authorization": f"Bearer {os.environ['MOONBASE_RESELLER_KEY']}"},
+            json={"productId": product_id, "quantity": quantity, "reference": f"order-{order_id}"},
+            timeout=15,
+        ).json()
+        if body["ok"]:
+            return [entry["key"] for entry in body["data"]["keys"]]
+        if body["error"]["code"] == "CLAIM_IN_PROGRESS" and attempt < 5:
+            time.sleep(attempt)
+            continue
+        raise RuntimeError(f"{body['error']['code']}: {body['error']['message']}")
+```
+  </CodeBlockTab>
+</CodeBlockTabs>
+
+## Exporting to CSV
+
+`GET /api/v2/reseller/keys/export` returns every available key as `text/csv` (attachment `license-keys-YYYY-MM-DD.csv`):
+
+```csv
+key,product,plan,order
+8F2A-41C9-D0B7-3E55-A1F0,Pro Edition,lifetime,cs_live_a1B2c3
+```
+
+Exported keys are marked handed out with the reference `CSV export YYYY-MM-DD HH:MM UTC`, so the API never gives them to anyone else afterwards. A claim running at the same moment keeps its own keys.
+
+## Marking keys by hand
+
+`PATCH /api/v2/reseller/keys/:id` with `{ "handedOut": true }` marks a key you gave out yourself; `{ "handedOut": false }` makes it available again (and clears its reference). Redeemed keys can't change: `409 LICENSE_ALREADY_ACTIVATED`. An unknown ID answers `404 LICENSE_NOT_FOUND`.
+
+## How customers redeem
+
+Customers redeem a key from their account page, which calls `POST /api/v2/licenses/redeem` with `{ "key": "8F2A-41C9-D0B7-3E55-A1F0" }` (session required). Loaders built for 1.8 can use [`POST /api/user/license/activate`](/docs/api/v1/reference). Redemption fires the `license.redeemed` [webhook](/docs/api/webhooks) and is rate limited (20 failed attempts per 15 minutes per IP and per hour per account).

@@ -1,16 +1,19 @@
 {
   "title": "Moonbase API",
-  "description": "REST endpoints for auth, profile, and file access.",
+  "description": "Client, admin, reseller and webhook APIs, plus the legacy v1 loader API.",
   "root": true,
   "pages": [
     "index",
     "authentication",
-    "user-info",
-    "files",
-    "---Reference---",
-    "reference",
     "errors",
-    "---Examples---",
-    "...examples"
+    "---Loaders and apps---",
+    "client-api",
+    "sdks",
+    "---Integrations---",
+    "admin-api",
+    "resellers",
+    "webhooks",
+    "---Legacy v1 API---",
+    "...v1"
   ]
 }

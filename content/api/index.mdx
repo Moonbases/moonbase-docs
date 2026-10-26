@@ -1,46 +1,95 @@
 ---
 title: Moonbase API
-description: Authenticate users, fetch profile data, and download files.
+description: Which Moonbase 2.0 API to use, the base URL, response envelopes and credentials.
 ---
 
-import { Settings, Zap } from 'lucide-react';
+import { KeyRound, Route, Zap } from 'lucide-react';
 
-Moonbase API is the backend surface for Moonbase apps and plugins. Use it to authenticate users, retrieve profile data, and fetch user files.
+Moonbase 2.0 serves several HTTP APIs from the same API server. They share accounts, products and licenses, but each one is meant for a different kind of caller and uses its own credentials.
 
-<Callout type="info" title="Authentication model">
-  All requests include your public API key. After login, include the JWT in the Token header for user scoped endpoints.
+## <Route className="inline size-4" /> Which API to use
+
+| You are building | Use | Base path | Credentials |
+| --- | --- | --- | --- |
+| A loader, launcher, plugin or app that checks a customer's license | [Client SDKs](/docs/api/sdks), or the [client API](/docs/api/client-api) directly | `/api/v2/client` | Username or email + password, then the public app key + session token |
+| Your own server, bot or back office that manages the store | [Admin API](/docs/api/admin-api) | `/api/v2/admin` | API key: `Authorization: Bearer mbk_…` |
+| A reseller's shop or bot that hands out license keys | [Reseller API](/docs/api/resellers) | `/api/v2/reseller` | Reseller API key: `Authorization: Bearer mbr_…` |
+| A receiver for store events (orders, refunds, licenses…) | [Webhooks](/docs/api/webhooks) | Your URL | Signing secret `whsec_…` |
+| A customer-facing app on top of the v2 account API | [Authentication](/docs/api/authentication) | `/api/v2` | Public app key + session token |
+| Nothing new: a loader built for Moonbase 1.8 | [Legacy v1 API](/docs/api/v1) | `/api` | Public app key + JWT |
+
+<Callout type="info" title="1.8 loaders keep working">
+  The v1 routes under `/api/...` are still served with the same paths, fields, status codes and response envelope. Existing loaders do not need to be rebuilt to keep working with 2.0. New loaders should use an SDK: signed license tokens, offline verification, per-product devices and floating licenses are only available through `/api/v2/client`.
 </Callout>
 
-## <Zap className="inline size-4" /> Quick start
+## <Zap className="inline size-4" /> Base URL
 
-<Steps>
-  <Step>Copy your public API key from the console output on first startup.</Step>
-  <Step>Authenticate with `POST /api/auth/user` to receive a JWT.</Step>
-  <Step>Use the JWT and API key for profile and file requests.</Step>
-</Steps>
-
-## <Settings className="inline size-4" /> Environment setup
-
-<Files>
-  <Folder name="." defaultOpen>
-    <File name=".env.local" />
-  </Folder>
-</Files>
+Every path in these docs is relative to the **API server**, the address set as `URL` in the API's `.env` (for example `https://api.example.com`; `http://localhost:80` by default). It is not the storefront/dashboard app URL: the app forwards browser requests to the API through its own proxy, which you should not call from other software.
 
 ```bash
-# Replace with your Moonbase API host.
-NEXT_PUBLIC_API_URL=https://your-moonbase-host
-# Printed once in the server console on first startup.
-NEXT_PUBLIC_API_KEY=your_public_key_here
+curl https://your-moonbase-host/api/health
+# {"status_message":"ALIVE","status_overview":"Server is alive","status_code":200}
 ```
+
+## Response envelopes
+
+**v2** (`/api/v2/...`) always answers JSON in one of two shapes:
+
+<Tabs items={['Success', 'Failure']} defaultIndex={0}>
+  <Tab>
+```json
+{ "ok": true, "data": { "token": "eyJhbGciOi…", "expiresIn": "1d" } }
+```
+  </Tab>
+  <Tab>
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "VALIDATION_FAILED",
+    "message": "The request is invalid.",
+    "details": [{ "path": "nonce", "message": "Use 8–128 letters, digits, dashes or underscores" }]
+  }
+}
+```
+  </Tab>
+</Tabs>
+
+Branch on `error.code`: codes are stable, `message` is for humans and may change. Paginated lists return `data` as `{ items, page, limit, total, totalPages }` and accept `page` (from 1) and `limit` (1–200, default 50).
+
+**v1** (`/api/...`) keeps the 1.x envelope: `{ status_message, status_overview, status_code, status_data? }`. See [Errors](/docs/api/errors) for both.
+
+## <KeyRound className="inline size-4" /> Credentials at a glance
+
+| Credential | Looks like | Where it comes from | Used for |
+| --- | --- | --- | --- |
+| Public app key | 40 hex characters | Printed once on the API's first start; `PUBLIC_API_KEY` in the app's `.env` | `Authorization` header of session requests (v1 and v2); embedded in loaders |
+| Private app key | 40 hex characters | Printed once on the API's first start; `PRIVATE_API_KEY` in the app's `.env` | v1 admin routes; never ship it in client software |
+| Session token | JWT | `POST /api/v2/auth/login`, `POST /api/v2/client/session`, `POST /api/auth/user` | `Token` header, valid 1 day |
+| API key | `mbk_…` | Dashboard → Developers (owner) | `/api/v2/admin/*` endpoints of the key's areas |
+| Reseller API key | `mbr_…` | Reseller's Wholesale page | `/api/v2/reseller/*` |
+| License public key | Ed25519 PEM / JWK | Dashboard → Developers, or `GET /api/v2/client/public-key` | Verifying license tokens offline |
+| Webhook secret | `whsec_…` | Dashboard → Webhooks (owner) | Verifying `Moonbase-Signature` |
+
+Details and limits are on the [Authentication](/docs/api/authentication) page. Store owners create keys and webhooks from the dashboard; see [API keys](/docs/guide/security#api-keys-for-your-integrations) and [Webhooks](/docs/guide/features/webhooks) in the Guide.
+
+## Endpoints that need no credentials
+
+- `GET /api/health`
+- `GET /api/v2/client/public-key`: the license verification key
+- `GET /api/v2/openapi.json`: OpenAPI description of the admin API
+- `GET /api/v2/products`, `GET /api/v2/products/:slug`, `GET /api/v2/products/:id/related`, `GET /api/v2/products/:id/releases`: the public catalog
+- `GET /api/v2/settings/public`: public store settings
 
 ## Jump in
 
 <Cards>
-  <Card title="Authentication" href="/docs/api/authentication" description="Log in, get a JWT, and learn required headers." />
-  <Card title="User profile" href="/docs/api/user-info" description="Fetch account data with your API key + JWT." />
-  <Card title="User files" href="/docs/api/files" description="Download user files and handle binary responses." />
-  <Card title="Examples" href="/docs/api/examples" description="Ready-to-run requests in multiple languages." />
-  <Card title="API reference" href="/docs/api/reference" description="Endpoints with request and response examples." />
-  <Card title="Errors and status codes" href="/docs/api/errors" description="Understand common error shapes and limits." />
+  <Card title="Authentication" href="/docs/api/authentication" description="App keys, sessions, API keys, reseller keys and rate limits." />
+  <Card title="Client API" href="/docs/api/client-api" description="Sign-in, signed license tokens, device modes and floating leases." />
+  <Card title="SDKs" href="/docs/api/sdks" description="Node.js, Python, C#, C++ and Lua clients for loaders." />
+  <Card title="Admin API" href="/docs/api/admin-api" description="Automate the store with API keys and the OpenAPI description." />
+  <Card title="Reseller API" href="/docs/api/resellers" description="Hand out wholesale keys from your own shop." />
+  <Card title="Webhooks" href="/docs/api/webhooks" description="Signed events for orders, refunds, licenses and more." />
+  <Card title="Errors and status codes" href="/docs/api/errors" description="Envelopes, common codes and rate-limit responses." />
+  <Card title="Legacy v1 API" href="/docs/api/v1" description="The 1.x loader routes, as served by 2.0." />
 </Cards>

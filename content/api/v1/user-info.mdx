@@ -1,0 +1,152 @@
+---
+title: User profile (v1)
+description: Fetch the signed-in account with the legacy endpoint GET /api/user/info.
+---
+
+<Callout type="info" title="Requires the public app key and a JWT">
+  Send the public app key in `Authorization` and the JWT from [`POST /api/auth/user`](/docs/api/v1/authentication) in `Token`. The v2 equivalent is `GET /api/v2/account`.
+</Callout>
+
+## Request flow
+
+<Steps>
+  <Step>Sign in with `POST /api/auth/user` to get a JWT.</Step>
+  <Step>Call `GET /api/user/info` with `Authorization` and `Token` headers.</Step>
+  <Step>Read the account's products from `status_data.user.products`. Expired products are removed before the answer is sent.</Step>
+</Steps>
+
+## Headers
+
+<TypeTable
+  type={{
+    Authorization: { type: 'string', description: 'Public app key (PUBLIC_API_KEY).', required: true },
+    Token: { type: 'string', description: 'JWT from POST /api/auth/user.', required: true },
+  }}
+/>
+
+<Tabs items={['Request', 'Response']} defaultIndex={0}>
+  <Tab>
+```http
+GET /api/user/info
+Authorization: <PUBLIC_API_KEY>
+Token: <jwt_token>
+```
+  </Tab>
+  <Tab>
+```json
+{
+  "status_message": "USER_INFO_RETRIEVED",
+  "status_overview": "success",
+  "status_code": 200,
+  "status_data": {
+    "user": {
+      "_id": "665f1c2e9b1d4a0012ab34cd",
+      "flags": 0,
+      "email": "alice@example.com",
+      "username": "alice",
+      "pin": null,
+      "products": [
+        {
+          "_id": "6671a9f04e2b7c0012cd0001",
+          "product": "665f1c2e9b1d4a0012ab0001",
+          "productName": "Pro Edition",
+          "expiration_date": "2026-11-26T10:00:00.000Z"
+        }
+      ],
+      "hwid": ["9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"],
+      "ip": ["203.0.113.7"],
+      "banned": null,
+      "self_service": {
+        "reset_cooldown_hours": 24,
+        "ip_reset_available_at": null,
+        "hwid_reset_available_at": null
+      }
+    }
+  }
+}
+```
+  </Tab>
+</Tabs>
+
+## Response fields
+
+`status_data.user` is the stored account without its password, so it may contain more fields than shown above. The ones loaders rely on:
+
+<TypeTable
+  type={{
+    _id: { type: 'string', description: 'Account ID.', required: true },
+    username: { type: 'string', description: 'Username.', required: true },
+    email: { type: 'string', description: 'Email address.', required: true },
+    flags: { type: 'number', description: '0 customer, 1 admin, 2 owner.', required: true },
+    products: { type: 'object[]', description: 'Products the account owns now: product (ID), productName, expiration_date (ISO date; lifetime access uses a date in the far future), and seats for products sold per seat.', required: true },
+    hwid: { type: 'string[]', description: 'Bound hardware IDs, oldest first.', required: true },
+    ip: { type: 'string[]', description: 'Bound IP addresses.', required: true },
+    pin: { type: 'null | 1', description: '1 when the account has a PIN (never the PIN itself).', required: false },
+    banned: { type: 'object | null', description: 'Ban reason and date, or null.', required: false },
+    self_service: { type: 'object', description: 'reset_cooldown_hours, ip_reset_available_at and hwid_reset_available_at for POST /api/user/reset-binding.', required: true },
+  }}
+/>
+
+<Callout type="warn" title="Product mode limits are not checked here">
+  `products` lists everything the account owns, whatever device the request comes from. Products set to count their own devices or to be floating licenses are only enforced per device by the [client API](/docs/api/client-api#device-modes).
+</Callout>
+
+## Status codes
+
+| Status | `status_message` | When |
+| --- | --- | --- |
+| 200 | `USER_INFO_RETRIEVED` | Success |
+| 400 | `FAILED_AUTHENTICATION` | `Authorization` or `Token` missing |
+| 401 | `AUTHENTICATION_FAILED` | Wrong app key |
+| 401 | `INVALID_TOKEN` | JWT invalid or expired: sign in again |
+| 401 | `TOKEN_REVOKED` | The password changed after this sign-in |
+| 401 | `INVALID_USER` | The account no longer exists |
+| 403 | `BANNED` | Account banned |
+| 403 | `BLACKLISTED` | Request IP is blocked |
+| 403 | `API_KEY_NOT_ALLOWED` | An `mbk_` or `mbr_` key was sent |
+| 429 | `TOO_MANY_REQUESTS` | General per-IP budget exceeded |
+
+## Example request
+
+<CodeBlockTabs defaultValue="curl">
+  <CodeBlockTabsList>
+    <CodeBlockTabsTrigger value="curl">cURL</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="javascript">JavaScript</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="python">Python</CodeBlockTabsTrigger>
+  </CodeBlockTabsList>
+  <CodeBlockTab value="curl">
+```bash
+curl "https://your-moonbase-host/api/user/info" \
+  -H "Authorization: <PUBLIC_API_KEY>" \
+  -H "Token: <jwt_token>"
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="javascript">
+```javascript
+const res = await fetch("https://your-moonbase-host/api/user/info", {
+  headers: { Authorization: "<PUBLIC_API_KEY>", Token: "<jwt_token>" },
+});
+
+const body = await res.json();
+if (body.status_overview !== "success") throw new Error(body.status_message);
+const owns = (productId) => body.status_data.user.products.some((entry) => entry.product === productId);
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="python">
+```python
+import requests
+
+res = requests.get(
+    "https://your-moonbase-host/api/user/info",
+    headers={"Authorization": "<PUBLIC_API_KEY>", "Token": "<jwt_token>"},
+    timeout=10,
+)
+body = res.json()
+if body["status_overview"] != "success":
+    raise RuntimeError(body["status_message"])
+products = body["status_data"]["user"]["products"]
+```
+  </CodeBlockTab>
+</CodeBlockTabs>
+
+More languages are on the [examples](/docs/api/v1/examples/user-info) page.

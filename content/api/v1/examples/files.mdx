@@ -1,0 +1,396 @@
+---
+title: File download examples (v1)
+description: Download a product file with GET /api/user/files/:file in twelve languages.
+---
+
+<Callout type="info" title="Legacy API">
+  Send the public app key in `Authorization` and the JWT in `Token`. A `200` answer is the file itself; any other status is a JSON error with `status_message` (`FILE_NOT_FOUND` when the file doesn't exist or the account doesn't own its product). Replace `https://your-moonbase-host` with your API URL and URL-encode file names.
+</Callout>
+
+Every example streams the body to disk instead of loading it into memory, because product files can be several GB. See [User files](/docs/api/v1/files) for headers, checksums and resuming with `Range`.
+
+<CodeBlockTabs defaultValue="javascript">
+  <CodeBlockTabsList>
+    <CodeBlockTabsTrigger value="javascript">JavaScript</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="typescript">TypeScript</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="python">Python</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="java">Java</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="csharp">C#</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="cpp">C++</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="ruby">Ruby</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="go">Go</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="rust">Rust</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="php">PHP</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="swift">Swift</CodeBlockTabsTrigger>
+    <CodeBlockTabsTrigger value="lua">Lua</CodeBlockTabsTrigger>
+  </CodeBlockTabsList>
+  <CodeBlockTab value="javascript">
+```javascript
+// Node.js 18+
+import { createWriteStream } from "node:fs";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+
+async function downloadFile(appKey, jwt, fileName, destination) {
+  const res = await fetch(`https://your-moonbase-host/api/user/files/${encodeURIComponent(fileName)}`, {
+    headers: { Authorization: appKey, Token: jwt },
+  });
+  if (res.status !== 200) throw new Error((await res.json()).status_message);
+  await pipeline(Readable.fromWeb(res.body), createWriteStream(destination));
+}
+
+await downloadFile("<PUBLIC_API_KEY>", "<jwt_token>", "loader.zip", "loader.zip");
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="typescript">
+```typescript
+// Node.js 18+
+import { createWriteStream } from "node:fs";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import type { ReadableStream } from "node:stream/web";
+
+export async function downloadFile(appKey: string, jwt: string, fileName: string, destination: string): Promise<void> {
+  const res = await fetch(`https://your-moonbase-host/api/user/files/${encodeURIComponent(fileName)}`, {
+    headers: { Authorization: appKey, Token: jwt },
+  });
+  if (res.status !== 200 || !res.body) {
+    const error = (await res.json()) as { status_message: string };
+    throw new Error(error.status_message);
+  }
+  await pipeline(Readable.fromWeb(res.body as ReadableStream), createWriteStream(destination));
+}
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="python">
+```python
+from urllib.parse import quote
+
+import requests
+
+
+def download_file(app_key: str, jwt: str, file_name: str, destination: str) -> None:
+    with requests.get(
+        f"https://your-moonbase-host/api/user/files/{quote(file_name)}",
+        headers={"Authorization": app_key, "Token": jwt},
+        stream=True,
+        timeout=30,
+    ) as res:
+        if res.status_code != 200:
+            raise RuntimeError(res.json()["status_message"])
+        with open(destination, "wb") as handle:
+            for chunk in res.iter_content(chunk_size=1 << 20):
+                handle.write(chunk)
+
+
+download_file("<PUBLIC_API_KEY>", "<jwt_token>", "loader.zip", "loader.zip")
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="java">
+```java
+import java.io.InputStream;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.time.Duration;
+
+public class MoonbaseDownload {
+    private static final HttpClient CLIENT = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofSeconds(10))
+        .followRedirects(HttpClient.Redirect.NORMAL)
+        .build();
+
+    public static void downloadFile(String appKey, String jwt, String fileName, Path destination) throws Exception {
+        String encoded = URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("https://your-moonbase-host/api/user/files/" + encoded))
+            .header("Authorization", appKey)
+            .header("Token", jwt)
+            .GET()
+            .build();
+
+        HttpResponse<InputStream> response = CLIENT.send(request, HttpResponse.BodyHandlers.ofInputStream());
+        try (InputStream body = response.body()) {
+            if (response.statusCode() != 200) {
+                throw new IllegalStateException(new String(body.readAllBytes(), StandardCharsets.UTF_8));
+            }
+            Files.copy(body, destination, StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+}
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="csharp">
+```csharp
+using System;
+using System.IO;
+using System.Net;
+using System.Net.Http;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+
+public static class MoonbaseDownload
+{
+    private static readonly HttpClient Http = new() { Timeout = Timeout.InfiniteTimeSpan };
+
+    public static async Task DownloadFileAsync(string appKey, string jwt, string fileName, string destination)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get,
+            "https://your-moonbase-host/api/user/files/" + Uri.EscapeDataString(fileName));
+        request.Headers.TryAddWithoutValidation("Authorization", appKey);
+        request.Headers.Add("Token", jwt);
+
+        using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        if (response.StatusCode != HttpStatusCode.OK)
+        {
+            using var error = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            throw new InvalidOperationException(error.RootElement.GetProperty("status_message").GetString());
+        }
+
+        await using var source = await response.Content.ReadAsStreamAsync();
+        await using var target = File.Create(destination);
+        await source.CopyToAsync(target);
+    }
+}
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="cpp">
+```cpp
+// libcurl
+#include <curl/curl.h>
+#include <cstdio>
+#include <stdexcept>
+#include <string>
+
+static size_t writeToFile(char* data, size_t size, size_t count, void* file) {
+  return std::fwrite(data, size, count, static_cast<std::FILE*>(file)) * size;
+}
+
+void downloadFile(const std::string& appKey, const std::string& jwt, const std::string& fileName, const std::string& destination) {
+  CURL* curl = curl_easy_init();
+  if (!curl) throw std::runtime_error("curl_easy_init failed");
+  char* encoded = curl_easy_escape(curl, fileName.c_str(), static_cast<int>(fileName.size()));
+  const std::string url = std::string("https://your-moonbase-host/api/user/files/") + encoded;
+  curl_free(encoded);
+
+  std::FILE* file = std::fopen(destination.c_str(), "wb");
+  if (!file) {
+    curl_easy_cleanup(curl);
+    throw std::runtime_error("cannot open " + destination);
+  }
+  curl_slist* headers = nullptr;
+  headers = curl_slist_append(headers, ("Authorization: " + appKey).c_str());
+  headers = curl_slist_append(headers, ("Token: " + jwt).c_str());
+  curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+  curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);  // 4xx/5xx: stop before writing the JSON error to the file
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeToFile);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, file);
+
+  const CURLcode result = curl_easy_perform(curl);
+  long status = 0;
+  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
+  std::fclose(file);
+  curl_slist_free_all(headers);
+  curl_easy_cleanup(curl);
+  if (result != CURLE_OK) {
+    std::remove(destination.c_str());
+    throw std::runtime_error("download failed (HTTP " + std::to_string(status) + "): " + curl_easy_strerror(result));
+  }
+}
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="ruby">
+```ruby
+require "erb"
+require "json"
+require "net/http"
+require "uri"
+
+def download_file(app_key, jwt, file_name, destination)
+  uri = URI("https://your-moonbase-host/api/user/files/#{ERB::Util.url_encode(file_name)}")
+  Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https") do |http|
+    request = Net::HTTP::Get.new(uri)
+    request["Authorization"] = app_key
+    request["Token"] = jwt
+    http.request(request) do |response|
+      raise JSON.parse(response.body)["status_message"] unless response.code == "200"
+
+      File.open(destination, "wb") { |file| response.read_body { |chunk| file.write(chunk) } }
+    end
+  end
+end
+
+download_file("<PUBLIC_API_KEY>", "<jwt_token>", "loader.zip", "loader.zip")
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="go">
+```go
+package moonbase
+
+import (
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
+)
+
+func DownloadFile(appKey, jwt, fileName, destination string) error {
+	req, _ := http.NewRequest(http.MethodGet, "https://your-moonbase-host/api/user/files/"+url.PathEscape(fileName), nil)
+	req.Header.Set("Authorization", appKey)
+	req.Header.Set("Token", jwt)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var body struct {
+			StatusMessage string `json:"status_message"`
+		}
+		_ = json.NewDecoder(resp.Body).Decode(&body)
+		return errors.New(body.StatusMessage)
+	}
+
+	file, err := os.Create(destination)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	_, err = io.Copy(file, resp.Body)
+	return err
+}
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="rust">
+```rust
+// Cargo.toml: reqwest = { version = "0.12", features = ["json"] }, serde_json = "1", tokio = { version = "1", features = ["full"] }
+use tokio::io::AsyncWriteExt;
+
+async fn download_file(app_key: &str, jwt: &str, file_name: &str, destination: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let url = format!("https://your-moonbase-host/api/user/files/{}", urlencode(file_name));
+    let mut response = reqwest::Client::new()
+        .get(url)
+        .header("Authorization", app_key)
+        .header("Token", jwt)
+        .send()
+        .await?;
+
+    if response.status() != reqwest::StatusCode::OK {
+        let body: serde_json::Value = response.json().await?;
+        return Err(body["status_message"].as_str().unwrap_or("REQUEST_FAILED").into());
+    }
+
+    let mut file = tokio::fs::File::create(destination).await?;
+    while let Some(chunk) = response.chunk().await? {
+        file.write_all(&chunk).await?;
+    }
+    file.flush().await?;
+    Ok(())
+}
+
+/// Percent-encodes a file name for use as one path segment.
+fn urlencode(segment: &str) -> String {
+    segment
+        .bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => (b as char).to_string(),
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="php">
+```php
+<?php
+function moonbase_download_file(string $appKey, string $jwt, string $fileName, string $destination): void
+{
+    $file = fopen($destination, 'wb');
+    $ch = curl_init('https://your-moonbase-host/api/user/files/' . rawurlencode($fileName));
+    curl_setopt_array($ch, [
+        CURLOPT_HTTPHEADER => ["Authorization: $appKey", "Token: $jwt"],
+        CURLOPT_FILE => $file,
+        CURLOPT_FAILONERROR => true, // 4xx/5xx: stop before writing the JSON error to the file
+    ]);
+    $ok = curl_exec($ch);
+    $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $error = curl_error($ch);
+    curl_close($ch);
+    fclose($file);
+
+    if (!$ok) {
+        unlink($destination);
+        throw new RuntimeException("Download failed (HTTP $status): $error");
+    }
+}
+
+moonbase_download_file('<PUBLIC_API_KEY>', '<jwt_token>', 'loader.zip', 'loader.zip');
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="swift">
+```swift
+import Foundation
+
+enum MoonbaseError: Error { case failed(String) }
+
+func downloadFile(appKey: String, jwt: String, fileName: String, destination: URL) async throws {
+    let encoded = fileName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/")))!
+    var request = URLRequest(url: URL(string: "https://your-moonbase-host/api/user/files/\(encoded)")!)
+    request.setValue(appKey, forHTTPHeaderField: "Authorization")
+    request.setValue(jwt, forHTTPHeaderField: "Token")
+
+    // URLSession.download streams to a temporary file instead of memory.
+    let (temporary, response) = try await URLSession.shared.download(for: request)
+    guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+        let body = try JSONSerialization.jsonObject(with: Data(contentsOf: temporary)) as? [String: Any]
+        throw MoonbaseError.failed(body?["status_message"] as? String ?? "REQUEST_FAILED")
+    }
+    try? FileManager.default.removeItem(at: destination)
+    try FileManager.default.moveItem(at: temporary, to: destination)
+}
+```
+  </CodeBlockTab>
+  <CodeBlockTab value="lua">
+```lua
+-- LuaSocket + LuaSec (HTTPS) + dkjson
+local https = require("ssl.https")
+local ltn12 = require("ltn12")
+local json = require("dkjson")
+
+local function url_encode(value)
+  return (value:gsub("[^%w%-%._~]", function(c) return string.format("%%%02X", string.byte(c)) end))
+end
+
+local function download_file(app_key, jwt, file_name, destination)
+  -- ltn12.sink.file streams the body to disk and closes the file when done.
+  local ok, code = https.request({
+    url = "https://your-moonbase-host/api/user/files/" .. url_encode(file_name),
+    method = "GET",
+    headers = { ["Authorization"] = app_key, ["Token"] = jwt },
+    sink = ltn12.sink.file(assert(io.open(destination, "wb"))),
+  })
+  if ok and code == 200 then return end
+
+  -- Anything else is a JSON error: read it back and remove the partial file.
+  local handle = io.open(destination, "rb")
+  local raw = handle and handle:read("*a") or ""
+  if handle then handle:close() end
+  os.remove(destination)
+  local body = json.decode(raw)
+  error(body and body.status_message or ("HTTP " .. tostring(code)))
+end
+```
+  </CodeBlockTab>
+</CodeBlockTabs>

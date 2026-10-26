@@ -1,0 +1,311 @@
+---
+title: Reference (v1)
+description: Every legacy loader endpoint under /api with request fields, responses and status codes.
+---
+
+<Callout type="info" title="Conventions">
+  Requests and responses are JSON unless noted. User routes need the public app key in `Authorization` and the JWT from `POST /api/auth/user` in `Token`. Every answer uses `{ status_message, status_overview, status_code, status_data? }`. Rate-limited calls answer `429 TOO_MANY_REQUESTS` or `429 TOO_MANY_ATTEMPTS`; authentication failures are listed on [Errors](/docs/api/errors).
+</Callout>
+
+## Account
+
+<Accordions type="single" collapsible>
+  <Accordion title="POST /api/auth/user">
+    Signs a user in and binds the hardware ID. No app key needed. See [Sign-in](/docs/api/v1/authentication).
+
+    <TypeTable
+      type={{
+        username: { type: 'string', description: 'Account username, up to 128 characters.', required: true },
+        password: { type: 'string', description: 'Account password.', required: true },
+        hwid: { type: 'string', description: 'Hardware ID, up to 4096 characters.', required: false },
+      }}
+    />
+
+    <Tabs items={['Request', 'Response', 'Status codes']} defaultIndex={0}>
+      <Tab>
+```json
+{ "username": "your_username", "password": "your_password", "hwid": "optional_hwid" }
+```
+      </Tab>
+      <Tab>
+```json
+{
+  "status_message": "USER_LOGGED_IN",
+  "status_overview": "success",
+  "status_code": 200,
+  "status_data": { "user": "your_username", "jwt": "<token>" }
+}
+```
+      </Tab>
+      <Tab>
+
+      - 200 `USER_LOGGED_IN`
+      - 400 `INVALID_REQUEST`, `INVALID_PASSWORD`
+      - 401 `HWID_LIMIT_EXCEEDED`, `IP_LIMIT_EXCEEDED`
+      - 403 `BANNED` (`status_data.ban_reason`, `ban_date`), `BLACKLISTED`
+      - 406 `INVALID_USER`
+      - 409 `SIGN_IN_CONFLICT`
+      - 429 `TOO_MANY_ATTEMPTS`, `TOO_MANY_REQUESTS`
+
+      </Tab>
+    </Tabs>
+  </Accordion>
+
+  <Accordion title="GET /api/user/info">
+    Returns the signed-in account without its password. See [User profile](/docs/api/v1/user-info).
+
+    <Tabs items={['Request', 'Response', 'Status codes']} defaultIndex={0}>
+      <Tab>
+```http
+GET /api/user/info
+Authorization: <PUBLIC_API_KEY>
+Token: <jwt_token>
+```
+      </Tab>
+      <Tab>
+```json
+{
+  "status_message": "USER_INFO_RETRIEVED",
+  "status_overview": "success",
+  "status_code": 200,
+  "status_data": {
+    "user": { "_id": "…", "username": "alice", "products": [], "hwid": [], "ip": [], "self_service": { "…": "…" } }
+  }
+}
+```
+      </Tab>
+      <Tab>
+
+      - 200 `USER_INFO_RETRIEVED`
+      - 400 `FAILED_AUTHENTICATION`
+      - 401 `AUTHENTICATION_FAILED`, `INVALID_TOKEN`, `TOKEN_REVOKED`, `INVALID_USER`
+      - 403 `BANNED`, `BLACKLISTED`, `API_KEY_NOT_ALLOWED`
+      - 429 `TOO_MANY_REQUESTS`
+
+      </Tab>
+    </Tabs>
+  </Accordion>
+
+  <Accordion title="POST /api/user/reset-binding">
+    Clears the account's own IP or hardware ID bindings, so the customer can sign in from new networks or devices. Needs the account password and respects the store's cooldown (24 hours by default). Limited to 5 requests per 15 minutes per IP.
+
+    <TypeTable
+      type={{
+        type: { type: '"ip" | "hwid"', description: 'Which bindings to clear. hwid also clears the device details.', required: true },
+        password: { type: 'string', description: 'The account password.', required: true },
+      }}
+    />
+
+    <Tabs items={['Response', 'Status codes']} defaultIndex={0}>
+      <Tab>
+```json
+{
+  "status_message": "HWID_RESET",
+  "status_overview": "success",
+  "status_code": 200,
+  "status_data": {
+    "type": "hwid",
+    "reset_at": "2026-10-26T10:00:00.000Z",
+    "next_reset_at": "2026-10-27T10:00:00.000Z"
+  }
+}
+```
+      </Tab>
+      <Tab>
+
+      - 200 `IP_RESET` or `HWID_RESET`
+      - 400 `INVALID_REQUEST`, `INVALID_PASSWORD`, `IP_ALREADY_RESET_OR_NOT_SET`, `HWID_ALREADY_RESET_OR_NOT_SET`
+      - 429 `RESET_COOLDOWN_ACTIVE` (`status_data.retry_at`), `TOO_MANY_ATTEMPTS`
+
+      </Tab>
+    </Tabs>
+  </Accordion>
+</Accordions>
+
+## Licenses
+
+<Accordions type="single" collapsible>
+  <Accordion title="POST /api/user/license/activate">
+    Redeems a license key into the signed-in account and returns the plan and new expiry. The product is added (or its time extended) right away.
+
+    <TypeTable
+      type={{
+        license: { type: 'string', description: 'The license key, e.g. 8F2A-41C9-D0B7-3E55-A1F0.', required: true },
+        email: { type: 'string', description: 'Only to redeem for another account: its email. Needs an admin with the licenses area. Your own email (or none) redeems into your account.', required: false },
+      }}
+    />
+
+    <Tabs items={['Request', 'Response', 'Status codes']} defaultIndex={0}>
+      <Tab>
+```http
+POST /api/user/license/activate
+Authorization: <PUBLIC_API_KEY>
+Token: <jwt_token>
+Content-Type: application/json
+
+{ "license": "8F2A-41C9-D0B7-3E55-A1F0" }
+```
+      </Tab>
+      <Tab>
+```json
+{
+  "status_message": "ACTIVATION_SUCCESS",
+  "status_overview": "success",
+  "status_code": 200,
+  "status_data": { "plan": "monthly", "expiration_date": "2026-11-26T10:00:00.000Z" }
+}
+```
+      </Tab>
+      <Tab>
+
+      - 200 `ACTIVATION_SUCCESS`
+      - 400 `INVALID_REQUEST`
+      - 403 `INSUFFICIENT_PERMISSIONS` (another account's `email` without the licenses area), `BANNED`
+      - 406 `INVALID_LICENSE`, `LICENSE_ALREADY_ACTIVATED`, `INVALID_EMAIL`
+      - 429 `TOO_MANY_ATTEMPTS`: 20 rejected keys per 15 minutes per IP, and per hour per account
+
+      </Tab>
+    </Tabs>
+  </Accordion>
+</Accordions>
+
+## Files
+
+<Accordions type="single" collapsible>
+  <Accordion title="POST /api/file/list-by-product">
+    Lists the files of a product the signed-in account owns, with a release manifest.
+
+    <TypeTable
+      type={{
+        product: { type: 'string', description: 'Product ID or exact product name.', required: true },
+      }}
+    />
+
+    <Tabs items={['Response', 'Status codes']} defaultIndex={0}>
+      <Tab>
+```json
+{
+  "status_message": "FILES_FETCHED",
+  "status_overview": "success",
+  "status_code": 200,
+  "status_data": [
+    {
+      "_id": "6671b0a14e2b7c0012cd1111",
+      "name": "loader.zip",
+      "originalName": "loader-2.4.0.zip",
+      "description": "Windows build",
+      "product": "665f1c2e9b1d4a0012ab0001",
+      "size": 18350212,
+      "mimetype": "application/zip",
+      "checksum": "9f86d081…"
+    }
+  ],
+  "release_passport": {
+    "id": "RP-3A7F09C2B1D4E5F6",
+    "product": { "id": "665f1c2e9b1d4a0012ab0001", "name": "Pro Edition", "slug": "pro-edition", "version": "2.4.0" },
+    "version": "2.4.0",
+    "issued_at": "2026-10-26T09:00:00.000Z",
+    "artifact_count": 1,
+    "protected_artifact_count": 1,
+    "total_size": 18350212,
+    "manifest_sha256": "…",
+    "artifacts": [{ "id": "6671b0a14e2b7c0012cd1111", "name": "loader.zip", "size": 18350212, "mimetype": "application/zip", "checksum": "9f86d081…", "checksum_algorithm": "sha256", "uploaded_at": "2026-10-26T09:00:00.000Z" }]
+  }
+}
+```
+
+Each file is its stored record without internal fields such as its disk path. `release_passport` summarises the product's files with their checksums. An unknown product answers an empty list.
+      </Tab>
+      <Tab>
+
+      - 200 `FILES_FETCHED`
+      - 400 `INVALID_REQUEST`
+      - 403 `ACCESS_DENIED`: the account doesn't own the product
+
+      </Tab>
+    </Tabs>
+  </Accordion>
+
+  <Accordion title="GET /api/user/files/:file">
+    Downloads a file by name as a binary stream, with `Range` support. See [User files](/docs/api/v1/files).
+
+    <Tabs items={['Request', 'Status codes']} defaultIndex={0}>
+      <Tab>
+```http
+GET /api/user/files/loader.zip
+Authorization: <PUBLIC_API_KEY>
+Token: <jwt_token>
+```
+      </Tab>
+      <Tab>
+
+      - 200 / 206 file body
+      - 404 `FILE_NOT_FOUND` (also when the account doesn't own the product), `FILE_NOT_FOUND_ON_DISK`
+      - 416 unsatisfiable range
+      - 500 `FILE_INTEGRITY_ERROR`
+
+      </Tab>
+    </Tabs>
+  </Accordion>
+
+  <Accordion title="POST /api/file/create-link">
+    Creates a short-lived download link bound to the signed-in account.
+
+    <TypeTable
+      type={{
+        file: { type: 'string', description: 'File ID or name.', required: true },
+        expire: { type: '"5m" | "15m" | "1h"', description: 'Link lifetime. Any other value means 15m.', default: '"15m"' },
+      }}
+    />
+
+    <Tabs items={['Response', 'Status codes']} defaultIndex={0}>
+      <Tab>
+```json
+{
+  "status_message": "LINK_CREATED",
+  "status_overview": "success",
+  "status_code": 200,
+  "status_data": {
+    "download_url": "https://your-moonbase-host/api/file/6671b0a14e2b7c0012cd1111?ticket=eyJhbGciOi…",
+    "token": "eyJhbGciOi…",
+    "expires": "15m",
+    "expires_at": "2026-10-26T10:15:00.000Z"
+  }
+}
+```
+      </Tab>
+      <Tab>
+
+      - 200 `LINK_CREATED`
+      - 400 `INVALID_REQUEST`
+      - 404 `INVALID_FILE`: no such file, or the account doesn't own its product
+
+      </Tab>
+    </Tabs>
+  </Accordion>
+
+  <Accordion title="GET /api/file/:file?ticket=…">
+    Downloads through a link from `create-link` (or `POST /api/v2/files/:id/link`). No headers needed; `:file` is the file ID or name, and `token` is accepted instead of `ticket`. Access is checked again, so links stop working when the account loses the product or is banned.
+
+    - 200 / 206 file body
+    - 400 `INVALID_REQUEST`: no ticket
+    - 403 `INVALID_TOKEN` (expired or invalid link), `TOKEN_FILE_MISMATCH`, `ACCESS_DENIED`
+    - 404 `NO_FILE_WAS_FOUND`, `FILE_NOT_FOUND_ON_DISK`
+  </Accordion>
+</Accordions>
+
+## Public
+
+<Accordions type="single" collapsible>
+  <Accordion title="GET /api/health">
+    Returns `{ "status_message": "ALIVE", "status_overview": "Server is alive", "status_code": 200 }`. No headers.
+  </Accordion>
+
+  <Accordion title="GET /api/product/:slug and GET /api/admin/product/list">
+    `GET /api/product/:slug` returns one active product as `PRODUCT_FOUND` (archived or unknown products answer 404). `GET /api/admin/product/list` returns every product, archived ones included, as `PRODUCT_LIST`. Neither needs headers. New integrations should use `GET /api/v2/products` and `GET /api/v2/products/:slug`.
+  </Accordion>
+</Accordions>
+
+## Other v1 routes
+
+The v1 API also has admin routes (`/api/admin/product/*`, `/api/admin/license/*`, `/api/admin/user/*`, `/api/admin/blacklist/*`, `/api/admin/logs/list`, `/api/file/*` management), account management (`/api/auth/user/new`, PIN routes, `/api/user/update-username`) and checkout routes (`/api/purchase/*`). They keep their 1.x behaviour for existing tools and plugins, with the 2.0 permission checks: most admin routes need the **private** app key and an admin whose areas include the route's area. For new integrations, use the [admin API](/docs/api/admin-api) with an API key instead: it is documented in OpenAPI, validated, and does not need a user session.

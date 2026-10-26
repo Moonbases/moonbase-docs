@@ -1,0 +1,16 @@
+---
+title: Examples (v1)
+description: Ready-to-run requests for the legacy v1 loader endpoints.
+---
+
+<Callout type="info" title="Where the keys come from">
+  The API prints the public and private app keys once, on its first start; the app's `.env` keeps them as `PUBLIC_API_KEY` and `PRIVATE_API_KEY`. These examples only need the public key. Use your API URL (the `URL` setting of the API), not the storefront URL.
+</Callout>
+
+These examples target the legacy v1 API that 1.8 loaders use. For new software, start from the [SDKs](/docs/api/sdks): they sign in through the [client API](/docs/api/client-api) and verify a signed license token instead of trusting plain JSON.
+
+<Cards>
+  <Card title="Sign-in" href="/docs/api/v1/examples/authentication" description="POST /api/auth/user and read the JWT." />
+  <Card title="User profile" href="/docs/api/v1/examples/user-info" description="GET /api/user/info with the public key and JWT." />
+  <Card title="File downloads" href="/docs/api/v1/examples/files" description="Stream GET /api/user/files/:file to disk." />
+</Cards>
