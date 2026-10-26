@@ -1,0 +1,58 @@
+---
+title: Subscriptions
+description: Let daily, monthly and yearly plans renew automatically by card, with plan switches and a grace period.
+---
+
+Daily, monthly and yearly plans paid by card can renew automatically as Stripe subscriptions. Each paid renewal is a normal order: access extends, and receipts, invoices, webhooks and analytics work as usual.
+
+<Callout type="warn" title="Stripe only">
+  Subscriptions need [Stripe](/docs/guide/payments/stripe) with the `invoice.*` and `customer.subscription.*` webhook events, and the customer portal enabled. PayPal, crypto, store credit and free orders are always one-time.
+</Callout>
+
+## Turn it on
+
+In **Store settings → General → Automatic renewal**:
+
+| Option | At checkout |
+| --- | --- |
+| **Off: one-time payments only** | Card payments are one-time. |
+| **Customer chooses at checkout** (default) | A **Renew automatically** switch, off by default, lets the customer choose. |
+| **Always renew card payments** | Every card payment for a daily, monthly or yearly plan becomes a subscription. |
+
+Lifetime plans never renew. A lifetime item in the same cart is charged once, with the first payment.
+
+Every timed plan in the cart must be the same (all monthly, for example) to renew. Otherwise checkout explains that the customer must check them out separately.
+
+<Callout type="info" title="Discount codes on subscriptions">
+  A discount code or store credit only lowers the first payment. Renewals are charged the full price. A [creator code](/docs/guide/features/discounts-and-creators#creator-codes) can still earn on every renewal if you turn on **Also earn on renewals**.
+</Callout>
+
+## Failed renewals and the grace period
+
+When a renewal can't be charged, Stripe retries it, and the customer gets an email with a link to pay. Meanwhile they keep access for a grace period set in **Store settings → General → Grace period after a failed renewal (days)**: 3 days by default, 0 to 30. With 0, access ends with the paid period.
+
+The customer's subscription shows **Payment failed** with "Retrying payment, access until …" and an **Update card** button. If Stripe gives up, the subscription ends and so does the access.
+
+## What customers can do
+
+Customers manage their subscriptions in **Dashboard → Subscriptions**:
+
+- **Cancel renewal**: access continues until the end of the paid period, then ends. They can **Resume renewal** any time before that.
+- **Payment method and invoices**: opens the Stripe customer portal to update the card and see Stripe invoices. Enable the portal in the Stripe Dashboard (**Settings → Billing → Customer portal**).
+- **Change plan**:
+  - **To a longer plan** (monthly to yearly, for example): the new plan starts today. Stripe charges the new period minus a credit for the unused part of the current one. If the card is declined, nothing changes.
+  - **To a shorter plan** (yearly to monthly): nothing changes today. The current plan runs until it ends, then renews on the new one. The customer can call it off with **Keep current plan** until then.
+
+Plan changes are offered when the subscription is active, isn't being cancelled, and every product in it still sells the new plan.
+
+## What you can do
+
+Admins with the **Orders** area see every subscription in **Dashboard → Subscriptions**, with its customer, products, price, period and status (**Active**, **Payment failed**, **Unpaid**, **Paused**, **Incomplete**, **Ending** or **Ended**). Filter by status, and use **Cancel renewal** or **Resume renewal** on a customer's behalf. Cancelling always takes effect at the end of the paid period.
+
+- Banning or deleting an account ends its subscriptions immediately.
+- Refunding a subscription's order removes the access it gave, but doesn't cancel the subscription in Stripe. Cancel the renewal too.
+- Each renewal appears in **Dashboard → Orders** as its own order, marked **Automatic renewal**.
+
+## Test it
+
+Use Stripe test mode and a [test clock](https://docs.stripe.com/billing/testing/test-clocks) to move a subscription forward in time, then check that the renewal shows up as an order and extends access. If renewals are charged but access doesn't extend, the webhook endpoint is missing events or is on an old API version (see [Stripe](/docs/guide/payments/stripe#webhook-events)).

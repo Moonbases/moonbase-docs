@@ -1,0 +1,151 @@
+---
+title: Upgrading from 1.8
+description: Move a 1.8.x store to Moonbase 2.0 step by step, and what changes for you and your customers.
+---
+
+These steps take a store from 1.8.x to 2.0.0. No destructive database migration is needed: license keys, legacy PINs and file checksums stay valid, and the original `/api` routes keep working for existing loaders and integrations.
+
+<Callout type="warn" title="Plan for some downtime">
+  The store is offline from step 1 until the API and the app are started again in step 5.
+</Callout>
+
+<Steps>
+  <Step>
+    ### 1. Stop and back up
+
+    Stop the API and the app. Then back up, as one set:
+
+    - the MongoDB database
+    - `api/storage/` (or the folder `STORAGE_DIR` points to)
+    - `api/.env` and `app/.env`
+    - `api/settings.json`
+    - any custom files in `api/plugins/` and `app/plugins/`
+  </Step>
+  <Step>
+    ### 2. Put the new files in place
+
+    The package unzips into a `Moonbase-2.0.0/` folder. Either way works:
+
+    - **Over the old install:** copy the contents of `Moonbase-2.0.0/` over your existing Moonbase folder. Your `.env` files, `api/storage/`, `api/settings.json` and plugins stay where they are.
+    - **Into a new folder:** use `Moonbase-2.0.0/` as the new install and copy `api/.env`, `app/.env`, `api/settings.json`, `api/storage/` and your plugins into it from the old one. Downloads keep working after the move, because files are found by name in the current storage folder. If `STORAGE_DIR` points outside the install, there is nothing to copy.
+
+    With GitHub access, `git pull` instead (see [Installation](/docs/guide/installation#install-and-update-through-github)).
+
+    The old `api/data/` folder is no longer used and can be deleted.
+
+    <Callout type="error" title="Bring your old .env files">
+      Don't let the installer create new `.env` files for an existing store. Your existing `ENCRYPT_KEY` must be kept.
+    </Callout>
+  </Step>
+  <Step>
+    ### 3. Check the settings
+
+    - **Keep your existing `ENCRYPT_KEY`.** Never replace it by hand: the database's license keys, API secrets and webhook secrets are encrypted with it. If `api/.env` still has the example value `replace_with_random_encrypt_key`, the API refuses to start until you move the data to a new key. Follow [Moving to a new ENCRYPT_KEY](/docs/guide/security#moving-to-a-new-encrypt_key) now.
+    - Install **Node.js 22.12 or newer**.
+    - Compare `api/.env` with `api/.env.example`. New settings are optional, but check these on every store (see [Reverse proxy](/docs/guide/operations#reverse-proxy)):
+      - `TRUST_PROXY_HOPS` in `api/.env` now defaults to `0` (it was `1`). If a proxy (nginx, Cloudflare…) sits in front of the API, set it explicitly.
+      - `PRIVATE_API_KEY` must be set in `app/.env`: the app uses it to tell the API each visitor's IP address.
+    - `NEXT_PUBLIC_NAME`, `NEXT_PUBLIC_DESCRIPTION` and `NEXT_PUBLIC_DISCORD_INVITE` in `app/.env` are no longer read. You set them in Store settings after the upgrade.
+    - Custom plugins: read [Plugins](#plugins) below and keep them disabled until they are updated.
+  </Step>
+  <Step>
+    ### 4. Update the payment webhooks
+
+    1.8 needed fewer webhook events. Without the new ones, renewals are charged without extending access, and refunds and disputes don't remove access.
+
+    - **Stripe:** in the Stripe Dashboard (Developers → Webhooks), open the endpoint for `/api/purchase/webhook` and select every event listed on [Stripe](/docs/guide/payments/stripe#webhook-events). Check the endpoint's API version: if it is older than `2025-03-31`, create a new endpoint on the current version with the same URL and events, put its signing secret in `STRIPE_WEBHOOK_SECRET`, then delete the old endpoint. Enable the customer portal (Settings → Billing → Customer portal) so customers can update their card.
+    - **PayPal:** add the events listed on [PayPal](/docs/guide/payments/paypal#webhook-events) to the webhook for `/api/purchase/webhook/paypal`. `PAYPAL_WEBHOOK_ID` must be set.
+    - **Coinbase Commerce:** make sure the endpoint sends the events listed on [Coinbase Commerce](/docs/guide/payments/coinbase#webhook-events).
+  </Step>
+  <Step>
+    ### 5. Install and start
+
+    Run the installer (`install.bat` or `bash install.sh`), then start the API, wait for "API is now ready", and start the app.
+
+    On this first start the API imports `api/settings.json` into Store settings. It leaves out the example logo and support email from the 1.8 file (`yourcdn.com`, `yourbrand.com`), clamps values outside the new limits (for example more than 100 IPs or devices per customer becomes 100), falls back to the default for invalid values, and logs each value it changed. After that, `settings.json` is no longer read.
+  </Step>
+  <Step>
+    ### 6. Review the store
+
+    Sign in as the owner and open **Dashboard → Store settings**:
+
+    - **General:** store name, description, logo, support email, Discord invite and brand color (these replace the `NEXT_PUBLIC_*` values). **Automatic renewal** starts as "Customer chooses at checkout": daily, monthly and yearly plans paid by card can become Stripe subscriptions. Set it to "Off: one-time payments only" if you don't want renewals.
+    - **Security:** IP and device limits, and request-log retention. Request logs are now kept 90 days by default; the daily cleanup at 03:00 UTC deletes older ones, so set **Keep request logs for** to `0` before then to keep all of 1.8's logs.
+    - **Emails** and **Billing:** email colors, checkout reminders and invoice details.
+
+    See [Store settings](/docs/guide/features/store-settings) for every option.
+  </Step>
+  <Step>
+    ### 7. Check that it works
+
+    - [ ] An existing customer can sign in and download a purchased file.
+    - [ ] **Dashboard → Files** shows no missing files in its storage report.
+    - [ ] A sandbox purchase works with every payment provider you use, and refunding it removes the access it gave.
+    - [ ] Stripe shows the webhook endpoint's recent deliveries as succeeded. With automatic renewal on, a test-mode subscription renewal (Stripe test clocks) extends access.
+    - [ ] An existing loader signs in with an existing license.
+    - [ ] **Dashboard → Request logs** shows loaders' real IP addresses, not your proxy's, and a customer who signs in from a browser gets their own IP address on their page in **Dashboard → Users** (see [Reverse proxy](/docs/guide/operations#real-visitor-ip-addresses)).
+  </Step>
+</Steps>
+
+## Plugins
+
+Plugins written for 1.8 need checking before you enable them again. Full details are in [Migrating plugins from 1.8](/docs/plugin/migrating).
+
+**Backend plugins** run on Express 5 and Mongoose 9 (1.8 used Express 4 and Mongoose 8). `ctx.app`, `ctx.core` (controllers, models, helpers, utils) and the hooks are unchanged. Check:
+
+- `verifyJWT` now refuses banned accounts and revoked sessions, and `apiAuth.private` applies admin areas to routes registered at full `/api/...` paths too.
+- The API is one compiled file, so `require('mongoose')` or `require('express')` in a plugin doesn't load the API's copy. Use `ctx.core.models.User.base` for Mongoose, and give a plugin that needs other packages its own folder with a `package.json` (see [Plugin dependencies](/docs/plugin/backend/overview#dependencies)).
+
+- Route wildcards need a name: `/files/*` becomes `/files/*path`; optional parts use braces: `/:name{.:ext}`.
+- `req.query` is read-only: don't assign to it or change it.
+- `req.body` is `undefined` (not `{}`) when no body parser ran. As in 1.8, `express.json()` is not active yet when plugins load, so routes that read a JSON body add it themselves.
+- Removed Express methods such as `req.param()` and `res.sendfile()`: see the [Express 5 migration guide](https://expressjs.com/en/guide/migrating-5.html).
+- Schemas, middleware and queries: see [Mongoose's migration guide to 9](https://mongoosejs.com/docs/migrating_to_9.html).
+- File records (`ctx.core.models.File`) now store only the file name in `path`; the file is in the storage folder (`STORAGE_DIR`, default `api/storage`).
+- Backend plugins can be loaded from another folder with `PLUGINS_DIR`.
+
+**Frontend plugins** keep the same API (`slots`, `mounts`, `pages`, `bootstrap`, `ctx.api`). The storefront and dashboard were redesigned, so `mounts` whose `selector` targets elements of the old pages no longer find them. Use the `global` slot, a plugin page, or for dashboard links the new `dashboard.nav` slot (or the `[data-plugin-mount="dashboard-nav"]` selector).
+
+## Loaders and SDKs
+
+- Loaders built for 1.8 keep working, including long hardware IDs. They only count account devices, not per-product or floating ones.
+- The new client SDKs (Node.js, Python, C#, C++ and Lua for FiveM) are in the `sdks` folder, and **Dashboard → Developers** shows each one ready to paste with your key. Rebuild loaders with the 2.0 SDKs to get signed license tokens, offline use, per-product devices and floating licenses.
+- With the 2.0 SDKs, sessions renew themselves while the app keeps checking in. They report the new `SESSION_EXPIRED` and `TOKEN_NOT_YET_VALID` (the device clock is behind) errors.
+
+See the [client API](/docs/api/client-api) and the [SDKs](/docs/api/sdks).
+
+## What changes for you
+
+Behaviour that is different from 1.8, even if you don't use any new feature:
+
+- **Branding moved to the dashboard.** Store name, description, logo, support email, Discord invite, brand color and currency live in **Store settings → General**.
+- **Refunds and disputes remove access.** The licenses a purchase granted are removed when it is refunded or disputed, and a won dispute restores them. Turn this off with **Store settings → Security → Revoke access on refunds and disputes**. Admins can also revoke an order by hand.
+- **Admin permissions.** Existing admins keep full access. The owner can limit an admin to specific areas from the user's page. Admins who were already limited need the new **Marketing** area to manage discount codes, and the new **Support** area to handle tickets. See [Security](/docs/guide/security#admin-roles-and-permissions).
+- **Admin areas cover more.** Revenue figures need the Orders area, product files the Files area, and redeeming a key for someone else the Licenses area. Admins can't give themselves store credit, creator payouts or reseller terms, or redeem gift cards they issued (the owner can).
+- **Request logs** are kept 90 days by default.
+- **Stricter limits.** Failed sign-ins are limited per account (20 per 15 minutes) as well as per address. License key redemption, password reset emails and adding teammates are rate limited.
+- **Breached-password check.** When Have I Been Pwned can't be reached, new passwords are accepted (with a warning in the API log) instead of sign-ups and password resets failing. `PASSWORD_BREACH_CHECK_STRICT=true` refuses them instead.
+- **Devices over the limit.** When an account's device limit drops (fewer seats, a lower store limit), the most recently added devices past it stop getting access until the customer removes a device.
+- **Downloads** start at once, also for multi-GB files, and can be resumed.
+- **Store credit and Stripe Tax.** With Stripe Tax on, store credit can't pay for orders. Refunding a gift card that was already spent takes the credit back, even below zero.
+- **Analytics and overview revenue** subtract partial refunds.
+- **Old dashboard links** such as `/dashboard/product/…`, `/dashboard/license` and `/dashboard/user` redirect to their new addresses.
+
+## What's new in 2.0
+
+<Cards>
+  <Card title="New storefront and dashboard" href="/docs/guide/features/store-settings" description="Image-first design with light and dark themes, driven by your brand color." />
+  <Card title="Products" href="/docs/guide/features/products" description="Bundles, volume discounts, seats, per-product devices, floating licenses and releases." />
+  <Card title="Discounts and creators" href="/docs/guide/features/discounts-and-creators" description="Discount codes, share links, creator commissions, tiers and payouts." />
+  <Card title="Subscriptions" href="/docs/guide/features/subscriptions" description="Automatic renewal of card payments, plan switches and a grace period." />
+  <Card title="Invoices and tax" href="/docs/guide/features/invoices-and-tax" description="Numbered invoices, credit notes and optional Stripe Tax." />
+  <Card title="Gift cards and store credit" href="/docs/guide/features/gift-cards-and-credit" description="Sell or give away gift cards and let customers pay with credit." />
+  <Card title="Checkout" href="/docs/guide/features/checkout" description="Guest checkout and checkout reminder emails." />
+  <Card title="Resellers" href="/docs/guide/features/resellers" description="Sell license keys in bulk to approved resellers." />
+  <Card title="Reviews" href="/docs/guide/features/reviews" description="Verified product reviews with moderation and replies." />
+  <Card title="Support tickets" href="/docs/guide/features/support-tickets" description="Answer customers from the dashboard." />
+  <Card title="Webhooks" href="/docs/guide/features/webhooks" description="Send signed events to your systems or Discord." />
+  <Card title="Analytics" href="/docs/guide/features/analytics" description="Revenue, orders and top products against the previous period." />
+  <Card title="Customer dashboard" href="/docs/guide/features/customer-dashboard" description="Devices, teams, subscriptions and support for your customers." />
+  <Card title="Security" href="/docs/guide/security" description="API keys, admin permissions, activity log and signed license tokens." />
+</Cards>

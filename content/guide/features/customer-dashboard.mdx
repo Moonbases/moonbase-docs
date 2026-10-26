@@ -1,0 +1,47 @@
+---
+title: Customer dashboard
+description: What your customers see when they sign in, and what they can do on their own.
+---
+
+Customers sign in to the store and open their dashboard from the user menu. Their sidebar shows only what applies to them.
+
+| Page | What customers do there |
+| --- | --- |
+| **Overview** | See their products with expiry dates, open each product's **Downloads**, and **Redeem a license** key. |
+| **Purchases** | See their orders, invoices, refunds and credit notes, and **Get help** about an order. |
+| **Subscriptions** | Cancel or resume renewal, change plan, update their card. See [Subscriptions](/docs/guide/features/subscriptions). |
+| **Teams** | Share seats with teammates. Shown only to customers who bought a product sold per seat. |
+| **Creator earnings** | Their creator codes, share links and commissions. Shown only to [creators](/docs/guide/features/discounts-and-creators#creator-codes). |
+| **Wholesale** | Buy and hand out keys. Shown only to [resellers](/docs/guide/features/resellers). |
+| **Support** | Open and follow [support tickets](/docs/guide/features/support-tickets). |
+| **Account** | Profile, password, PIN, store credit, billing details, devices and networks. |
+
+## Account
+
+- **Profile**: email, account type, member since and Discord link status. Customers can **Change username** (with their password).
+- **Password**: changing it signs them out on every device. With email configured, a forgotten password can be reset from the sign-in page.
+- **Account PIN**: a secret used to link their Discord account with the store's Discord bot (`/link`) and to confirm sensitive actions. It is shown only once.
+- **Store credit**: balance, history, and **Redeem a gift card**. See [Gift cards and store credit](/docs/guide/features/gift-cards-and-credit).
+- **Billing details**: name or company, VAT or tax ID, address and country, printed on their invoices.
+
+Email addresses can't be changed. Customers can't delete their account themselves; you can, from **Dashboard → Users** (see [Customers](/docs/guide/features/customers)).
+
+## Devices and networks
+
+Your products lock each account to a limited number of IP addresses and devices (see [IP and device limits](/docs/guide/security#ip-and-device-limits)). In **Account → Devices and networks**, customers see how many they use and can:
+
+- **Reset** their IP addresses or devices, to bind new ones the next time they use your software.
+- **Rename device** (e.g. "Gaming PC") and **Remove device** one at a time, with when each was last used.
+- See **Products with their own devices**, and **Remove device** or, for floating licenses, **Sign out device** to free a place right away.
+
+Resets and removals need the customer's password and follow **Store settings → Security → Self-service reset cooldown** (24 hours by default; signing out a floating device has no cooldown). A device that went over the account's limit (for example when seats ran out) shows "Over the device limit · can't sign in" until the customer removes another one.
+
+## Teams
+
+Customers who bought several seats of a product sold per seat share them in **Teams**:
+
+1. Enter a teammate's **username or email** (an existing account) and click **Add**. The teammate gets an email and the product appears in their own account.
+2. The buyer keeps one seat, so they can add one teammate fewer than their seats. "Every seat is taken" means they need more seats.
+3. **Remove** takes a teammate's access away at once. Teammates can **Leave** a team from **Teams you're on**.
+
+An account can be on one team per product. When seats lapse or are refunded, the most recently added teammates lose access first ("No seat").

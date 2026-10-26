@@ -1,0 +1,60 @@
+---
+title: Webhooks
+description: Send store events to your own systems as signed JSON, or announce them in a Discord channel.
+---
+
+Outgoing webhooks tell other systems when something happens in your store: a sale, a refund, a new customer. They live in **Dashboard → Webhooks** (under **System**), which only the owner can open.
+
+These are separate from the [payment webhooks](/docs/guide/payments) that Stripe, PayPal and Coinbase send to Moonbase.
+
+## Add an endpoint
+
+Click **Add endpoint**:
+
+| Field | What it does |
+| --- | --- |
+| **Endpoint URL** | Where to send events. It must answer with a 2xx status within 10 seconds. |
+| **Description** | So you remember what it is. |
+| **Events to send** | At least one of the events below. |
+
+For your own systems, copy the **signing secret** (`whsec_…`) shown after you create the endpoint. It is shown only once. **Roll secret** on the endpoint's page replaces it; the old one stops working at once.
+
+## Events
+
+| Event | When |
+| --- | --- |
+| `order.completed` | An order was paid (or was free) and delivered. |
+| `order.refunded` | An order was refunded or its access revoked. |
+| `order.disputed` | A customer opened a payment dispute. |
+| `license.redeemed` | A license was redeemed or granted to a customer. |
+| `license.revoked` | A license was taken back from a customer. |
+| `customer.registered` | A new customer account was created. |
+| `subscription.payment_failed` | A subscription renewal could not be charged. |
+| `subscription.canceled` | A subscription ended. |
+| `review.created` | A customer wrote a review. |
+
+**Send test event** sends a `webhook.test` event and shows the result right away, even when the endpoint is turned off.
+
+## Discord
+
+Paste a Discord channel webhook URL (`https://discord.com/api/webhooks/…`) as the endpoint URL. Moonbase detects it ("Discord webhook detected") and posts readable messages in your store's name and brand color instead of JSON, for example to announce sales. Discord endpoints have no signing secret and never mention anyone.
+
+To create the URL in Discord: **Server settings → Integrations → Webhooks → New webhook → Copy webhook URL**.
+
+## Deliveries and retries
+
+Each endpoint's page lists its deliveries as **Delivered**, **Retrying** or **Failed**, with the response. **Resend** sends one again.
+
+- A failed delivery is retried up to 8 times over about two days (after 1 minute, 5 minutes, 30 minutes, 2 hours, 6 hours, 12 hours and 24 hours).
+- After 50 failed attempts in a row, the endpoint is turned **Off**. Fix the receiver, then turn **Enabled** back on.
+- Deliveries are kept for 30 days.
+
+To change the events or description, use **Settings** on the endpoint's page. To change the URL, delete the endpoint and add a new one.
+
+## Local and private addresses
+
+Moonbase refuses to deliver to `localhost` and private network addresses (10.x, 192.168.x…), so webhooks can't be used to probe your server's network. To deliver to a service on the same machine or your LAN, set `WEBHOOKS_ALLOW_PRIVATE_NETWORKS=true` in `api/.env` and restart the API.
+
+## For developers
+
+Every request carries a `Moonbase-Signature` header, plus `Moonbase-Event` and `Moonbase-Delivery`. The payloads and how to verify the signature are in the [webhooks API reference](/docs/api/webhooks).

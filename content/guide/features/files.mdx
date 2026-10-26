@@ -1,0 +1,56 @@
+---
+title: Files and downloads
+description: Upload the files customers download, set storage limits and keep an eye on storage health.
+---
+
+Files live in **Dashboard → Files** (under **Catalog**). Admins need the **Files** area. Every file belongs to one product, and only customers who own that product can download it.
+
+## Upload a file
+
+Click **Upload file**, then:
+
+| Field | What it does |
+| --- | --- |
+| **File** | One file per upload. Batch scripts (`.bat`, `.cmd`, `.scr`, `.pif`, `.com`) are refused. |
+| **Product** | Only owners of this product can download the file. |
+| **Display name** | What customers see in their downloads. Must be unique in the store. |
+| **Description** | Optional: release notes, install steps or what's inside. |
+
+The upload shows "Uploading…", then "Verifying and storing…" while the API computes the file's SHA-256 checksum. Owners of the product get an email about the new file when email is configured.
+
+To ship a new version, upload the new file and delete the old one: files can't be replaced, only renamed or described differently. Deleting a file removes it from customers' downloads for good.
+
+## Storage limits
+
+Set the limits in **Store settings → Uploads**:
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| **Maximum file size** | 250 MB | Largest file you can upload (up to 102,400 MB). |
+| **Total storage limit** | 0 | Total size of all files, in MB. 0 means no limit. |
+| **Keep free on disk** | 256 MB | Uploads are refused when free disk space would drop below this. |
+
+Files are stored in `api/storage/` or the folder set by `STORAGE_DIR`. Behind a reverse proxy, raise its upload limit too (see [Uploads and downloads](/docs/guide/operations#uploads-and-downloads)).
+
+## Storage health
+
+The **Storage health** card shows disk usage, stored files, free space, missing files and untracked files:
+
+| Status | Meaning |
+| --- | --- |
+| **Healthy** | Every file is stored and accounted for. |
+| **Needs attention** | Some stored files aren't linked to any record, or disk space is getting low. |
+| **Degraded** | Some files are missing on disk, so customers can't download them. Re-upload them. |
+| **Critical** | The disk is almost full. Free up space before uploading more files. |
+
+Files are found by name in the current storage folder, so moving the install or the storage folder keeps downloads working, as long as the files come along.
+
+## What customers see
+
+Customers download from their dashboard **Overview**: under **Your products**, each product has a **Downloads** list. Each download uses a short-lived link that checks their access again, so banned customers and customers whose access ended can't download.
+
+- Downloads start at once, also for multi-GB files, and can be resumed while the link is valid.
+- Customers can check the files against the published SHA-256 checksums ("Release passport").
+- If the stored file no longer matches the uploaded one (size or content), the download fails with `FILE_INTEGRITY_ERROR` and the API log names the file. Restore it from a backup or upload it again.
+
+Admins with the **Files** area can download any file from its page.

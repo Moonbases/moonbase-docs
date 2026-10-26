@@ -1,32 +1,96 @@
 ---
-title: Stripe Setup
-description: Create a Stripe webhook and provide your secret key.
+title: Stripe
+description: Accept card payments and subscriptions with Stripe, and set up its webhook.
 ---
+
+Stripe handles card payments, and it is the only provider for [automatic renewal](/docs/guide/features/subscriptions) and [Stripe Tax](/docs/guide/features/invoices-and-tax).
 
 <Steps>
   <Step>
-    ### 1. Get your Stripe secret key
+    ### Copy your secret key
 
-    Create a Stripe account and copy the secret key from the dashboard.
+    In the [Stripe Dashboard](https://dashboard.stripe.com), open **Developers → API keys** and copy the secret key into `api/.env`:
+
+    ```dotenv
+    STRIPE_SECRET_KEY=sk_live_...
+    ```
+
+    Use the test-mode key (`sk_test_…`) while you try things out.
   </Step>
   <Step>
-    ### 2. Create a webhook
+    ### Create the webhook endpoint
 
-    Set the destination URL to your API host:
+    In **Developers → Webhooks**, add an endpoint:
 
+    ```text
+    https://<your API URL>/api/purchase/webhook
     ```
-    http://<your-host>:80/api/purchase/webhook
-    ```
+
+    Use the **current API version** for the endpoint, and select every event in [Webhook events](#webhook-events).
   </Step>
   <Step>
-    ### 3. Enable the checkout event
+    ### Copy the signing secret
 
-    Subscribe to:
+    Open the endpoint, reveal its signing secret (`whsec_…`) and put it in `api/.env`:
 
-    - `checkout.session.completed`
+    ```dotenv
+    STRIPE_WEBHOOK_SECRET=whsec_...
+    ```
+
+    Stripe appears at checkout only when both `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are set. Restart the API.
+  </Step>
+  <Step>
+    ### Enable the customer portal
+
+    In **Settings → Billing → Customer portal**, activate the portal. Customers use it to update the card of their subscriptions from **Dashboard → Subscriptions**.
   </Step>
 </Steps>
 
-<Callout type="note" title="Use your real domain">
-  If your API is public, use your domain and HTTPS. Stripe must be able to reach the URL from the internet.
+## Webhook events
+
+Select all of these. Refunds, disputes, discount code holds and automatic renewals depend on them.
+
+| Event | What Moonbase does |
+| --- | --- |
+| `checkout.session.completed` | Delivers the order once it is paid. |
+| `checkout.session.async_payment_succeeded` | Delivers an order paid with a delayed method, such as a bank debit. |
+| `checkout.session.async_payment_failed` | Releases the discount code and store credit the checkout was holding, and tells the customer the payment failed. |
+| `checkout.session.expired` | Same, for a checkout the customer abandoned. |
+| `invoice.paid` | Turns a subscription renewal into an order and extends access. |
+| `invoice.payment_failed` | Starts the renewal grace period and emails the customer a payment link. |
+| `customer.subscription.created` | Keeps the subscription in sync. |
+| `customer.subscription.updated` | Keeps the subscription in sync (cancellations, plan changes, payment problems). |
+| `customer.subscription.deleted` | Ends the subscription and its access. |
+| `charge.refunded` | Removes access on a full refund, or records a partial refund (with a credit note) and keeps access. |
+| `charge.dispute.created` | Removes access while the payment is disputed. |
+| `charge.dispute.closed` | Restores access when you win the dispute. A lost or closed-without-winning dispute leaves access removed. |
+
+Whether refunds and disputes remove access is set in **Store settings → Security → Revoke access on refunds and disputes** (on by default).
+
+<Callout type="warn" title="Endpoints from Moonbase 1.8">
+  Stripe sends events in the API version of the endpoint, not Moonbase's. If your endpoint's version is older than `2025-03-31`, create a new endpoint on the current version with the same URL and events, put its signing secret in `STRIPE_WEBHOOK_SECRET`, then delete the old endpoint. The API log warns when the endpoint's version differs from the one Moonbase uses.
 </Callout>
+
+## Subscriptions
+
+With **Store settings → General → Automatic renewal** set to "Customer chooses at checkout" or "Always renew card payments", daily, monthly and yearly plans paid by card become Stripe subscriptions. They need the `invoice.*` and `customer.subscription.*` events above. See [Subscriptions](/docs/guide/features/subscriptions).
+
+## Stripe Tax
+
+Turn on **Store settings → Billing → Calculate tax with Stripe Tax** to add VAT or sales tax at card checkout. Set up your tax registrations in Stripe first. See [Invoices and tax](/docs/guide/features/invoices-and-tax).
+
+## Test it
+
+1. Use your test-mode keys and a test-mode webhook endpoint.
+2. Buy a product with a [Stripe test card](https://docs.stripe.com/testing).
+3. In **Developers → Webhooks**, check that the endpoint's recent deliveries succeeded.
+4. Refund the payment in Stripe and check that the customer's access is removed.
+5. With automatic renewal on, use a Stripe test clock to advance a subscription and check that the renewal extends access.
+
+Keep Stripe's automatic retries on: Moonbase answers with an error when delivery fails, so Stripe retries the same order safely.
+
+## Good to know
+
+- Moonbase never refunds money itself. Refund in Stripe and the webhook removes access. If you refunded some other way, use **Revoke access** on the order (see [Orders and licenses](/docs/guide/features/orders-and-licenses)).
+- Refunding a subscription's order doesn't cancel the subscription in Stripe. Cancel it too, or it keeps renewing.
+- Stripe Checkout offers every payment method you enabled in your Stripe Dashboard (cards, Apple Pay, bank debits…).

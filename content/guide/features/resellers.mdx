@@ -1,0 +1,55 @@
+---
+title: Resellers
+description: Let approved accounts buy license keys in bulk at a discount and hand them to their own customers.
+---
+
+A reseller is an account that buys license keys wholesale, at its own discount, and gives them to its customers, who redeem them in your store like any key. Resellers live in **Dashboard → Resellers** (under **Marketing**); admins need the **Marketing** area.
+
+## Add a reseller
+
+The reseller needs an account in your store first. Then click **Add reseller**:
+
+| Field | What it does |
+| --- | --- |
+| **Account** | Username or email of the account. Banned accounts can't be resellers. |
+| **Wholesale discount** | Percent off the list price of every plan (1 to 90). |
+| **Minimum keys per order** | Smallest order they can place, counting every key in it (1 to 1,000). |
+| **Note** | Agreement, contact person… Only admins see it. |
+| **Can buy** | Turn off to pause the reseller. |
+
+Click **Edit terms** to change them later. Admins can't make themselves resellers or change their own terms; the owner can.
+
+## What resellers can buy
+
+The reseller now sees **Wholesale** in their dashboard. They can buy keys for every active product that has a price for the plan, except gift cards and bundles, at the list price minus their discount. Volume discounts and discount codes don't stack on top.
+
+They pay like any customer (card, PayPal, crypto, or store credit), always as a one-time payment. The keys appear on their Wholesale page as soon as the payment is confirmed, and they get an email.
+
+## How keys are handed out
+
+Keys stay **unredeemed** and give the reseller nothing themselves. The reseller gives each customer one key, and the customer redeems it from their dashboard (**Redeem a license**).
+
+On the Wholesale page, keys move from **Ready** to **Handed out** to **Redeemed**, so a key is never given to two customers. A reseller hands keys out:
+
+- **By hand**: copy a key and click **Mark as handed out** (or **Make available again** if it wasn't used).
+- **By CSV**: **Export available keys** downloads every ready key and marks them handed out.
+- **By API**: from their own shop or bot (see below).
+
+## Reseller API keys
+
+Resellers can deliver keys automatically. Under **API access** on their Wholesale page, they click **Create key**, name it after the system that uses it, and copy the key (`mbr_…`). It is shown only once.
+
+- Up to five keys per reseller, each revocable at any time.
+- They only work on the reseller API, never on admin endpoints.
+- They hand out keys with `POST /api/v2/reseller/keys/claim`, sending their own order number as the `reference`: repeating a reference returns the same keys, so retries are safe. A claim that can't be filled hands out nothing.
+
+The endpoints are described in the [reseller API](/docs/api/resellers).
+
+## Pause or remove a reseller
+
+- **Pausing** (turning off **Can buy**) stops new orders and their access to the Wholesale page, keys list and API. Keys they already sold keep working.
+- **Remove reseller** ends wholesale for them for good and revokes their API keys. Keys already bought keep working, redeemed or not.
+
+## Refunds
+
+With **Store settings → Security → Revoke access on refunds and disputes** on (the default), refunding or disputing a wholesale order removes all its keys, redeemed or not: customers who redeemed one lose that access. With the setting off, the keys keep working.

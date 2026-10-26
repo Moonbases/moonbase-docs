@@ -1,41 +1,149 @@
 ---
-title: Installation via GitHub
-description: Get access to the repository, clone it locally, and pull updates.
+title: Installation
+description: Install Moonbase 2.0 from the BuiltByBit package or from GitHub.
 ---
 
-Use GitHub for painless updates without downloading new release packages each time.
+Moonbase ships as a ready-to-run package: the API is already compiled, and the installer builds the storefront on your machine. You can get it from BuiltByBit or, if your purchase includes it, from the private GitHub repository.
+
+## Requirements
+
+- **Node.js 22.12 or newer**, with npm. Check with `node -v`.
+- **MongoDB**: a local server or a hosted cluster such as MongoDB Atlas.
+- **Windows or Linux.**
+- **HTTPS in production**, usually through a reverse proxy (see [Operations](/docs/guide/operations#reverse-proxy)).
+
+## Package layout
+
+The BuiltByBit download unzips into a `Moonbase-2.0.0/` folder. A GitHub clone has the same layout.
+
+<Files>
+  <Folder name="Moonbase-2.0.0" defaultOpen>
+    <File name="install.bat / install.sh" />
+    <File name="api.bat / api.sh" />
+    <File name="app.bat / app.sh" />
+    <File name="readme.md" />
+    <Folder name="api" defaultOpen>
+      <File name=".env.example" />
+      <File name="index.js" />
+      <File name="settings.json" />
+      <Folder name="plugins" disabled />
+      <Folder name="storage" disabled />
+    </Folder>
+    <Folder name="app" defaultOpen>
+      <File name=".env.example" />
+      <Folder name="plugins" disabled />
+      <File name="(Next.js source)" />
+    </Folder>
+  </Folder>
+</Files>
+
+- `install.bat` / `install.sh` install dependencies and build the app.
+- `api.bat` / `api.sh` start the API; `app.bat` / `app.sh` start the storefront and dashboard.
+- `api/index.js` is the compiled API. `api/settings.json` only seeds the store settings on the very first start.
+- `api/plugins/` and `app/plugins/` hold [plugins](/docs/plugin).
+- `api/storage/` holds uploaded files and product images. It is created when the API runs.
+- `readme.md` is the package readme, with the same instructions as this guide.
+
+## Install from the BuiltByBit package
 
 <Steps>
   <Step>
-    ### 1. Access the repository
+    ### Unzip the package
 
-    - **Download from BuiltByBit (optional):** If you already installed via BuiltByBit and want to stay there, you can keep updating manually.
-    - **Request GitHub access:** After your BuiltByBit download, open a #ticket. You will be granted access to the private GitHub repo.
+    Unzip `Moonbase-2.0.0.zip` where you want the store to live, for example `C:\Moonbase` or `/opt/moonbase`.
+
+    <Callout type="warn" title="Upgrading from 1.8?">
+      Don't follow this page. Use [Upgrading from 1.8](/docs/guide/upgrading): you must keep your existing `.env` files and `ENCRYPT_KEY`.
+    </Callout>
   </Step>
   <Step>
-    ### 2. Clone the repo
+    ### Run the installer once
 
-    - Remove the old BuiltByBit copy if you are switching.
-    - Open a terminal or PowerShell where you want the project.
+    <Tabs items={['Windows', 'Linux']}>
+      <Tab>
+        ```bash
+        install.bat
+        ```
+      </Tab>
+      <Tab>
+        ```bash
+        bash install.sh
+        ```
+      </Tab>
+    </Tabs>
 
-    ```bash
-    git clone https://github.com/aledlb8/moonbase.git
-    ```
+    The first run:
 
-    You now have a `moonbase` folder in your chosen directory.
+    - checks that Node.js 22.12 or newer is installed,
+    - creates `api/.env` and `app/.env` from the `.env.example` files,
+    - fills `ENCRYPT_KEY` and `JWT_SECRET` in `api/.env` with random values,
+    - stops, so you can edit both files.
+
+    That stop is expected: the message ends with "Moonbase was not installed" on Windows.
   </Step>
   <Step>
-    ### 3. Pulling updates
+    ### Edit both `.env` files
 
-    Whenever a new release drops:
+    Follow [Configuration](/docs/guide/setup) to fill in `api/.env` and `app/.env`. Set `NEXT_PUBLIC_API_URL` in `app/.env` now: it is compiled into the app in the next step.
+  </Step>
+  <Step>
+    ### Run the installer again
 
-    ```bash
-    cd moonbase
-    git pull
-    ```
+    The second run installs the locked dependencies of `api/` and `app/`, builds the app, and removes the build-only dependencies. When it finishes it prints "Moonbase 2.0.0 installed".
+  </Step>
+  <Step>
+    ### Start Moonbase
+
+    Start the API first, save the API keys it prints, then start the app. See [First start](/docs/guide/setup#first-start).
   </Step>
 </Steps>
 
-<Callout type="note" title="Environment files are not tracked">
-  Your `.env` files stay local and are not committed to Git. If we add or rename env variables, update them manually when told.
+<Callout type="error" title="Keep ENCRYPT_KEY forever">
+  The generated `ENCRYPT_KEY` encrypts license keys and secrets in your database. Back it up with the database and never replace it by hand. See [Security](/docs/guide/security#encrypt_key-and-jwt_secret).
+</Callout>
+
+What the installer never does:
+
+- It never overwrites an existing `.env` file.
+- It replaces an example `JWT_SECRET` in an existing `api/.env`, but never an existing `ENCRYPT_KEY`, because your data is encrypted with whatever key the store started with.
+
+## Install and update through GitHub
+
+GitHub access makes updates a single `git pull` instead of downloading a new package each time.
+
+<Steps>
+  <Step>
+    ### Request access
+
+    After buying Moonbase on BuiltByBit, open a ticket and ask for repository access. You will be added to the private repository.
+  </Step>
+  <Step>
+    ### Clone the repository
+
+    Open a terminal where you want the store to live:
+
+    ```bash
+    git clone https://github.com/Moonbases/Moonbase.git
+    cd Moonbase
+    ```
+
+    The clone has the same layout as the package. Continue with [Run the installer once](#run-the-installer-once).
+
+    If you are switching from a BuiltByBit copy, move your `api/.env`, `app/.env`, `api/settings.json`, `api/storage/` and custom plugins into the clone before you run the installer.
+  </Step>
+  <Step>
+    ### Pull updates
+
+    When a new release is out, back up first (see [Backups](/docs/guide/operations#backups)), read its upgrade notes, then:
+
+    ```bash
+    git pull
+    ```
+
+    Run the installer again to install the new dependencies and rebuild the app, then restart the API and the app.
+  </Step>
+</Steps>
+
+<Callout type="info" title="What Git leaves alone">
+  The repository's `.gitignore` keeps your `.env` files, `api/storage/`, dependencies and build output out of Git. `api/settings.json` and the `plugins` folders are tracked, so back them up before pulling if you changed them. New or renamed `.env` settings are never added for you: compare your files with the `.env.example` files after each update.
 </Callout>

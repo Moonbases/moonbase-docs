@@ -1,0 +1,21 @@
+{
+  "title": "Features",
+  "pages": [
+    "store-settings",
+    "products",
+    "files",
+    "orders-and-licenses",
+    "checkout",
+    "subscriptions",
+    "invoices-and-tax",
+    "discounts-and-creators",
+    "gift-cards-and-credit",
+    "resellers",
+    "reviews",
+    "support-tickets",
+    "webhooks",
+    "analytics",
+    "customers",
+    "customer-dashboard"
+  ]
+}

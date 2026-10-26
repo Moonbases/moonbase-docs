@@ -1,16 +1,45 @@
 ---
 title: Payments
-description: Configure Stripe, Coinbase Commerce, or PayPal for checkout.
+description: Connect Stripe, PayPal or Coinbase Commerce, and point their webhooks at your API.
 ---
 
-Connect one or more payment providers to accept card and crypto payments.
+Moonbase accepts cards through Stripe, PayPal, and crypto through Coinbase Commerce. Configure only the providers you use: checkout shows a provider only when all of its `.env` values are set. With none configured, checkout says "Payments are currently unavailable".
 
-<Callout type="info" title="Webhook base URL">
-  Webhooks must reach your running Moonbase API. Use your public host or domain, not `localhost`.
+| Provider | Checkout option | Webhook URL |
+| --- | --- | --- |
+| [Stripe](/docs/guide/payments/stripe) | **Card**: cards, Apple Pay and other methods enabled in Stripe | `/api/purchase/webhook` |
+| [PayPal](/docs/guide/payments/paypal) | **PayPal** | `/api/purchase/webhook/paypal` |
+| [Coinbase Commerce](/docs/guide/payments/coinbase) | **Crypto** | `/api/purchase/webhook/coinbase` |
+
+Prefix each URL with the public HTTPS address of your **API** (the `URL` in `api/.env`), for example `https://api.example.com/api/purchase/webhook`.
+
+<Callout type="warn" title="Webhooks are not optional">
+  Orders are delivered, renewed, refunded and disputed through these webhooks. Send every event listed on each provider's page: without them, refunds and disputes don't remove access, renewals don't extend it, and discount codes stay reserved.
 </Callout>
 
+## What each provider supports
+
+| | Stripe | PayPal | Coinbase |
+| --- | --- | --- | --- |
+| One-time payments | Yes | Yes | Yes |
+| [Automatic renewal](/docs/guide/features/subscriptions) | Yes | No | No |
+| [Stripe Tax](/docs/guide/features/invoices-and-tax) | Yes | No | No |
+| Refunds remove access automatically | Yes | Yes | No |
+| Partial refunds recorded | Yes | Yes | No |
+| Disputes remove and restore access | Yes | Yes | No |
+
+Orders paid entirely with [store credit](/docs/guide/features/gift-cards-and-credit), and free orders, complete without any provider.
+
+## Retries and safety
+
+Keep each provider's automatic retries on. When delivery fails, Moonbase answers with an error so the provider sends the event again, and a payment is never delivered twice.
+
+If an order stays **Processing**, wait five minutes, then use **Retry fulfillment** on the order in **Dashboard → Orders**.
+
+Moonbase never sends refunds itself: refund in your provider's dashboard and the webhook does the rest.
+
 <Cards>
-  <Card title="Stripe" href="/docs/guide/payments/stripe" description="Create a webhook and enable checkout events." />
-  <Card title="Coinbase" href="/docs/guide/payments/coinbase" description="Add Commerce keys and webhook events." />
-  <Card title="PayPal" href="/docs/guide/payments/paypal" description="Create a REST API app and webhook." />
+  <Card title="Stripe" href="/docs/guide/payments/stripe" description="Cards, subscriptions, Stripe Tax and the customer portal." />
+  <Card title="PayPal" href="/docs/guide/payments/paypal" description="REST app, webhook ID and dispute events." />
+  <Card title="Coinbase Commerce" href="/docs/guide/payments/coinbase" description="Crypto payments and charge events." />
 </Cards>

@@ -1,0 +1,71 @@
+---
+title: Storefront and checkout
+description: How customers find and buy your products, guest checkout, and reminder emails for unfinished checkouts.
+---
+
+## The storefront
+
+- **Home page**: your store name and description, featured products, categories and reviews.
+- **Shop** (`/shop`): every listed product, with search (names, descriptions and tags), category and price filters, and sorting by popularity, date or price. Visitors can also search from anywhere with <kbd>/</kbd> or <kbd>Ctrl</kbd>+<kbd>K</kbd>.
+- **Product page** (`/products/your-slug`): images, plans, price, bundle contents, volume discounts, features, FAQ, reviews and suggested products. Customers who already own the product see until when.
+- **Cart**: quantities, volume discount hints and "Frequently bought together" suggestions.
+
+The look follows your brand color and logo from [Store settings](/docs/guide/features/store-settings), with light and dark themes. Customers can pick their language and theme.
+
+## Checkout
+
+At checkout, customers choose a payment method. Only providers you configured appear (see [Payments](/docs/guide/payments)):
+
+| Option | Provider |
+| --- | --- |
+| **Card** | Stripe: cards, Apple Pay and other methods enabled in your Stripe account |
+| **Crypto** | Coinbase Commerce |
+| **PayPal** | PayPal |
+
+Customers can also:
+
+- enter a discount code under **Have a discount code?**, or arrive with a `?coupon=CODE` link (see [Discounts](/docs/guide/features/discounts-and-creators#share-a-code-as-a-link));
+- pay part or all of the order with **store credit** (see [Gift cards and store credit](/docs/guide/features/gift-cards-and-credit));
+- choose **Renew automatically** for daily, monthly and yearly plans paid by card, depending on your [automatic renewal](/docs/guide/features/subscriptions) setting.
+
+A cart that costs nothing shows **Get it for free** and is delivered at once. After paying, customers land on a page that waits for the provider's confirmation, then shows what they got.
+
+## Guest checkout
+
+By default, customers sign in before checking out. Turn on **Store settings → General → Guest checkout** to let visitors pay with just an email address.
+
+- The order goes to the account with that email, which is created if needed. Nobody is signed in, so typing someone else's email can never open their account.
+- A new account gets an email with a link to set its password once the order is paid (the link lasts 7 days; each paid order sends a fresh one).
+- Free products and store credit still need signing in.
+- A visitor can place 10 guest checkouts per 15 minutes.
+- Guest accounts that never pay are removed after 30 days.
+
+<Callout type="warn" title="Needs email">
+  Guest checkout needs outgoing email (SMTP). Without it, the setting shows a warning and checkout still asks visitors to sign in.
+</Callout>
+
+## Checkout reminders
+
+Email customers who started a checkout but didn't pay, with a link that puts their cart back. Set it up in **Store settings → Emails → Checkout reminders**:
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| **Send checkout reminders** | Off | Turns reminders on. |
+| **Send after (hours)** | 2 | When the first reminder goes out: 1 to 72 hours after the checkout started. |
+| **Last reminder after (hours)** | 0 | Optional second email, counted from the checkout (up to 168 hours). It must be later than the first one. 0 sends none. |
+| **Discount code to offer** | Empty | Optional existing, active code, applied automatically from the link. |
+| **A unique code in each reminder** | Off | Each reminder gets its own copy of the code: it works once, only for that customer, for 7 days, so it can't be shared. |
+
+How reminders are sent:
+
+- Only checkouts that reached the payment page count, and only within two days of starting.
+- Customers who paid in the meantime are skipped, and nobody gets more than one first reminder a week.
+- Reminders go to accounts that aren't banned and haven't unsubscribed. A guest checkout made with the email of an existing account can get one; a new guest account that hasn't set its password yet doesn't.
+- Each email has a **Stop cart reminders** link. It opens the `/unsubscribe` page, where the customer confirms with **Stop reminders**. It only stops checkout reminders, not order emails.
+- The reminder link (`/cart/recover/…`) puts the products that are still on sale back in the cart and applies the code.
+
+The unique copies of a code don't appear in **Dashboard → Discounts**, and they don't earn creator commission. **Dashboard → Analytics** shows how many reminders went out and the orders that followed them.
+
+<Callout type="warn" title="Needs email">
+  Without outgoing email, no reminders are sent, and the settings page says so.
+</Callout>

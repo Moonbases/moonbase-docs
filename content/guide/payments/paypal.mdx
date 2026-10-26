@@ -1,31 +1,66 @@
 ---
-title: PayPal Setup
-description: Create a REST API app and subscribe to capture events.
+title: PayPal
+description: Accept PayPal payments with a REST app and a webhook.
 ---
 
 <Steps>
   <Step>
-    ### 1. Create a REST API app
+    ### Create a REST API app
 
-    Go to https://developer.paypal.com/dashboard and create a REST API app.
-    Copy the Client ID and Secret into your environment configuration.
+    In the [PayPal Developer Dashboard](https://developer.paypal.com/dashboard), create a REST API app and copy its Client ID and Secret into `api/.env`:
+
+    ```dotenv
+    PAYPAL_CLIENT_ID=...
+    PAYPAL_CLIENT_SECRET=...
+    PAYPAL_MODE=sandbox
+    ```
+
+    Use `PAYPAL_MODE=sandbox` with sandbox credentials while testing, and `live` with live credentials in production.
   </Step>
   <Step>
-    ### 2. Add a webhook
+    ### Add a webhook
 
-    From https://developer.paypal.com/dashboard/webhooks, add a webhook URL:
+    In the app's webhook settings ([developer.paypal.com/dashboard/webhooks](https://developer.paypal.com/dashboard/webhooks)), add a webhook with this URL:
 
+    ```text
+    https://<your API URL>/api/purchase/webhook/paypal
     ```
-    http://<your-host>:80/api/purchase/webhook/paypal
-    ```
+
+    Subscribe it to every event in [Webhook events](#webhook-events).
   </Step>
   <Step>
-    ### 3. Subscribe to the event
+    ### Copy the webhook ID
 
-    - `PAYMENT.CAPTURE.COMPLETED`
+    Put the webhook's ID in `api/.env` and restart the API:
+
+    ```dotenv
+    PAYPAL_WEBHOOK_ID=...
+    ```
+
+    It is **required**. Moonbase checks every webhook with PayPal using this ID and rejects webhooks without it. PayPal is offered at checkout only when `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` and `PAYPAL_WEBHOOK_ID` are all set.
   </Step>
 </Steps>
 
-<Callout type="note" title="Live vs sandbox">
-  Make sure you are using the right credentials and webhook type for your environment.
+## Webhook events
+
+| Event | What Moonbase does |
+| --- | --- |
+| `PAYMENT.CAPTURE.COMPLETED` | Delivers the order. |
+| `PAYMENT.CAPTURE.DENIED` | Marks an unpaid order failed and releases its discount code and store credit. If the order was already delivered, its access is removed. |
+| `PAYMENT.CAPTURE.REFUNDED` | Removes access on a full refund, or records a partial refund (with a credit note) and keeps access. |
+| `PAYMENT.CAPTURE.REVERSED` | Removes access: the payment was reversed. |
+| `CUSTOMER.DISPUTE.CREATED` | Removes access while the payment is disputed. |
+| `CUSTOMER.DISPUTE.RESOLVED` | Restores access when the dispute ends in your favour, is denied, or is cancelled by the buyer. A lost dispute leaves access removed. |
+
+Whether refunds and disputes remove access is set in **Store settings → Security → Revoke access on refunds and disputes** (on by default). A denied capture of an order that was already delivered always removes its access.
+
+## Good to know
+
+- When the buyer returns from PayPal, Moonbase captures the payment and delivers the order right away. If PayPal holds the capture as pending, the order is delivered when `PAYMENT.CAPTURE.COMPLETED` arrives.
+- PayPal payments are always one-time: [automatic renewal](/docs/guide/features/subscriptions) needs Stripe.
+- PayPal orders never get tax from [Stripe Tax](/docs/guide/features/invoices-and-tax).
+- Moonbase never refunds money itself. Refund in PayPal and the webhook removes access.
+
+<Callout type="warn" title="Sandbox and live don't mix">
+  Sandbox credentials, a sandbox webhook and `PAYPAL_MODE=sandbox` go together; so do live credentials, a live webhook and `PAYPAL_MODE=live`. A webhook ID from the other mode makes every webhook fail.
 </Callout>

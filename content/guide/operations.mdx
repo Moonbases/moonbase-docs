@@ -1,24 +1,23 @@
 ---
-title: Build and Run
-description: Rebuild the app and start the API and frontend services.
+title: Operations
+description: Start and stop Moonbase, rebuild the app, run it behind a reverse proxy and back it up.
 ---
 
-## Rebuild the app
+## Start and stop
 
-```bash
-cd app
-npm run build
-```
+Start the API first, wait for `API is now ready to use on port …`, then start the app.
 
-## Start the services
-
-Run the API first so it can initialize, then start the app.
-
-<Tabs items={['Batch files', 'Manual commands']} defaultIndex={0}>
+<Tabs items={['Windows', 'Linux', 'Manual']}>
   <Tab>
     ```bash
-    .\api.bat
-    .\app.bat
+    api.bat
+    app.bat
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    bash api.sh
+    bash app.sh
     ```
   </Tab>
   <Tab>
@@ -34,6 +33,185 @@ Run the API first so it can initialize, then start the app.
   </Tab>
 </Tabs>
 
-<Callout type="note" title="Use your real host">
-  When configuring clients or webhooks, use the public host where your Moonbase API runs, not `localhost`.
+Stop either one with <kbd>Ctrl</kbd>+<kbd>C</kbd>. The API lets open requests finish and exits within 20 seconds.
+
+### Keep it running in production
+
+`api.bat`, `api.sh`, `app.bat` and `app.sh` don't restart Moonbase if it stops or the server reboots. In production, run both with a process manager such as PM2 or a systemd service.
+
+Always start the API from the `api` folder and the app from the `app` folder: each reads the `.env` file in the folder it starts in.
+
+<Tabs items={['PM2', 'systemd']}>
+  <Tab>
+    ```bash
+    cd /opt/moonbase/api
+    pm2 start index.js --name moonbase-api
+
+    cd /opt/moonbase/app
+    pm2 start npm --name moonbase-app -- run start
+
+    pm2 save
+    ```
+  </Tab>
+  <Tab>
+    ```ini title="/etc/systemd/system/moonbase-api.service"
+    [Unit]
+    Description=Moonbase API
+    After=network.target
+
+    [Service]
+    WorkingDirectory=/opt/moonbase/api
+    ExecStart=/usr/bin/node index.js
+    Restart=on-failure
+
+    [Install]
+    WantedBy=multi-user.target
+    ```
+
+    Create a second service for the app with `WorkingDirectory=/opt/moonbase/app` and `ExecStart=/usr/bin/npm run start`.
+  </Tab>
+</Tabs>
+
+### Run one API process only
+
+Run **one** API process per database. Store settings are read when the API starts and rate limits are counted in memory, so a second API instance would miss setting changes made through the other one and double every limit.
+
+## Rebuild the app
+
+Values that start with `NEXT_PUBLIC_` (such as `NEXT_PUBLIC_API_URL`) are compiled into the app. After changing one, or after an update, run the installer again: it reinstalls the dependencies, rebuilds the app and removes the build-only dependencies. Then restart the app.
+
+<Callout type="info" title="Why not npm run build?">
+  The installer removes the build tools once the app is built, so `npm run build` on its own fails afterwards. Use the installer.
 </Callout>
+
+Changing `PUBLIC_API_KEY`, `PRIVATE_API_KEY` or `TRUST_PROXY_HOPS` in `app/.env`, or anything in `api/.env`, only needs a restart of that process.
+
+## Reverse proxy
+
+In production, put the API and the app behind an HTTPS reverse proxy (nginx, Caddy, IIS) or Cloudflare. Payment providers, loaders and browsers should all use your public `https://` addresses, never `localhost`.
+
+### Real visitor IP addresses
+
+Moonbase needs each visitor's real IP address for IP limits, the IP blacklist, rate limits and the logs. It gets it in two ways, each with its own `TRUST_PROXY_HOPS` setting.
+
+**Browsers → app → API.** The app passes each visitor's address to the API, signed with `PRIVATE_API_KEY`. That key must be set in `app/.env` and match the API's private key. `TRUST_PROXY_HOPS` in **`app/.env`** counts the proxies in front of the app:
+
+| Setup in front of the app | `TRUST_PROXY_HOPS` in `app/.env` |
+| --- | --- |
+| One proxy, such as nginx | `0` or `1` |
+| Cloudflare, then nginx | `2` |
+
+Run the app behind a proxy in production: when visitors reach `next start` directly, they can choose the address the app reports.
+
+**Loaders, SDKs and integrations → API.** `TRUST_PROXY_HOPS` in **`api/.env`** counts the proxies in front of the API:
+
+| Setup in front of the API | `TRUST_PROXY_HOPS` in `api/.env` |
+| --- | --- |
+| Loaders reach the API directly | `0` (default) |
+| nginx (or another proxy) | `1` |
+| Cloudflare, then nginx | `2` |
+
+Each proxy must add the address it received the request from to `X-Forwarded-For` (nginx: `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`).
+
+<Callout type="warn" title="Get the number right">
+  Too high a value lets clients pick the IP address Moonbase sees. Too low makes every client look like your proxy. The API log warns about the mistakes it can detect.
+</Callout>
+
+To check the result:
+
+- **Browsers:** sign in to the store with a test customer account, then open that customer in **Dashboard → Users**. Its IP addresses should be your own, not your proxy's.
+- **Loaders:** sign in with a loader, then open **Dashboard → Request logs**. It should show the loader's real address.
+
+### Uploads and downloads
+
+Uploads go through the app (its `/api/proxy` route) to the API, and downloads come straight from the API, so apply these settings to **both** sites.
+
+### nginx example
+
+The app and the API each get their own hostname. If nginx runs on the same machine, give the API a free port (for example `PORT=8080` in `api/.env`), since nginx needs port 80.
+
+```nginx
+# Storefront and dashboard
+server {
+    listen 443 ssl;
+    server_name store.example.com;
+    # ssl_certificate and ssl_certificate_key ...
+
+    client_max_body_size 300m;   # at least the upload limit in Store settings → Uploads
+    proxy_request_buffering off; # pass uploads through as they arrive
+    proxy_buffering off;         # pass downloads through without a temporary file
+    proxy_read_timeout 300s;     # the API checksums a large upload before it answers
+    proxy_send_timeout 300s;
+
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# API
+server {
+    listen 443 ssl;
+    server_name api.example.com;
+    # ssl_certificate and ssl_certificate_key ...
+
+    client_max_body_size 300m;
+    proxy_request_buffering off;
+    proxy_buffering off;
+    proxy_read_timeout 300s;
+    proxy_send_timeout 300s;
+
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+With this setup, set `TRUST_PROXY_HOPS=1` in both `.env` files, `URL=https://api.example.com` and `CLIENT_URL=https://store.example.com` in `api/.env`, and `NEXT_PUBLIC_API_URL=https://api.example.com` in `app/.env` (then rebuild).
+
+<Callout type="warn" title="Cloudflare limits">
+  Cloudflare limits uploads to 100 MB on its Free and Pro plans and cuts off requests that get no answer for 100 seconds. Upload larger files through a hostname that is not proxied by Cloudflare.
+</Callout>
+
+### Security headers
+
+The app already sends `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` and a basic `Content-Security-Policy`. Behind HTTPS, also set `Strict-Transport-Security` on your proxy, as in the example above. Moonbase leaves it to the proxy so stores can still run plain HTTP on a local network.
+
+## Backups
+
+Treat these as one recovery set, and test restoring it before you go live:
+
+- the MongoDB database
+- `api/storage/` (or the folder `STORAGE_DIR` points to)
+- `api/.env` and `app/.env`
+- `api/settings.json`
+- your custom plugins in `api/plugins/` and `app/plugins/`
+
+<Callout type="error" title="The database and ENCRYPT_KEY belong together">
+  A database restored without its `ENCRYPT_KEY` cannot be read. The database also holds the key that signs license tokens: if you lose it (or `ENCRYPT_KEY`), loaders that embed its public key must be rebuilt.
+</Callout>
+
+## Scheduled cleanups
+
+The API runs these jobs on its own:
+
+- **Request logs** older than the retention period are deleted every day at 03:00 UTC. Set the period in **Store settings → Security → Keep request logs for** (90 days by default, `0` keeps them forever). Logs contain IP addresses, so keep only what you need.
+- **Guest checkout accounts** that never paid are removed after 30 days (daily, 03:30 UTC).
+- **Expired access** is cleaned up, and customers whose products are about to expire or have expired are notified.
+
+## Updating
+
+1. Back up (see [Backups](#backups)).
+2. Read the release's upgrade notes. For 1.8 → 2.0, follow [Upgrading from 1.8](/docs/guide/upgrading).
+3. Replace the files (new package, or `git pull`), run the installer, then start the API and the app.
+
+The dashboard compares your version with the marketplace page to tell you when an update is out. The marketplace often refuses automated requests, so if it never says, check BuiltByBit yourself.

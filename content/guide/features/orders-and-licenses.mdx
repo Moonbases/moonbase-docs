@@ -1,0 +1,68 @@
+---
+title: Orders and licenses
+description: Follow orders, retry delivery, revoke access, and generate or grant license keys.
+---
+
+## Orders
+
+**Dashboard → Orders** (under **Sales**) lists every checkout with its products, customer, date, payment method, status and total. Admins need the **Orders** area. Filter by status:
+
+| Status | Meaning |
+| --- | --- |
+| **Pending** | Waiting for the payment. |
+| **Processing** | Paid; delivery is in progress. |
+| **Completed** | Paid and delivered. |
+| **Failed** | The payment or the delivery failed. |
+| **Refunded** | Refunded at the provider, or revoked by hand. |
+| **Disputed** | The customer opened a dispute. |
+
+Click an order to see its items, discount, store credit, tax, payment ID, invoice and credit notes, delivery attempts and any delivery error.
+
+### Retry delivery
+
+If an order is **Failed**, or stays **Processing**, wait five minutes, then click **Retry fulfillment** on the order. Retrying is safe: a payment is never delivered twice. Refunded and disputed orders can't be retried.
+
+The overview warns you when orders failed to fulfill.
+
+### Revoke access
+
+**Revoke access** on a completed order deletes the licenses it granted, marks it refunded and adds a credit note to its invoice. Use it after refunding a customer outside the payment provider, for example for a crypto payment.
+
+Moonbase never sends money back itself. To refund, use your provider's dashboard: Stripe and PayPal refunds and disputes remove access automatically through the webhook (see [Payments](/docs/guide/payments)).
+
+<Callout type="info" title="Refunds and disputes">
+  Whether provider refunds and disputes remove access is set in **Store settings → Security → Revoke access on refunds and disputes** (on by default). A won dispute restores the access. Partial refunds keep the order and its access, and get a credit note for the refunded amount. **Revoke access** always removes access, whatever the setting.
+</Callout>
+
+## Licenses
+
+**Dashboard → Licenses** lists every license key with its product, plan, status (**Unused** or **Active**), owner and creation date. Admins need the **Licenses** area. Keys are created automatically when customers buy; you can also create them yourself.
+
+A key looks like `XXXX-XXXX-XXXX-XXXX-XXXX`. Keys from Moonbase 1.x keep working.
+
+### Generate keys
+
+To sell keys elsewhere, give them away or hand them out manually:
+
+1. Click **Generate licenses**.
+2. Choose a product and a plan (only the plans the product sells), and a **Quantity** of up to 100 keys.
+3. Click **Generate keys**, then **Copy all keys** or **Download as text file**.
+
+The keys stay **Unused** until a customer redeems one. You can find them later in the license list.
+
+### Grant a license
+
+To give a product directly to a customer, open them in **Dashboard → Users** and click **Grant product**. Pick the product and plan. Granting extends any access they already have.
+
+### Revoke or delete a key
+
+Open a license to manage it:
+
+- **Revoke**: the owner loses the access the key granted, and the key becomes unused again, so it can be redeemed again.
+- **Delete**: the key stops working permanently, and its owner loses the access it granted.
+
+### How customers redeem a key
+
+Customers click **Redeem a license** on their dashboard **Overview** and enter the key. The product unlocks at once ("… unlocked until …"). Customers who enter 20 wrong keys within 15 minutes, or 20 within an hour on one account, are blocked for a while.
+
+Keys bought by [resellers](/docs/guide/features/resellers) are redeemed the same way.

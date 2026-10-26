@@ -1,4 +1,4 @@
 {
   "title": "Payments",
-  "pages": ["index", "stripe", "coinbase", "paypal"]
+  "pages": ["index", "stripe", "paypal", "coinbase"]
 }

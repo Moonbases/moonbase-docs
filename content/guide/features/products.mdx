@@ -1,0 +1,133 @@
+---
+title: Products
+description: Create products and plans, sell bundles, volume discounts and seats, choose how devices are counted, and publish releases.
+---
+
+Products live in **Dashboard → Products** (under **Catalog**). Admins need the **Products** area.
+
+## Create a product
+
+Click **New product**, fill in the form and click **Create product**. The preview on the right shows how the product card will look in the store.
+
+### General
+
+| Field | What it does |
+| --- | --- |
+| **Name** | Up to 120 characters. Must be unique. |
+| **URL slug** | The product's address in the store: `/products/your-slug`. Filled in from the name; lowercase letters, digits and dashes. |
+| **Version** | Shown on the product page. Publishing a [release](#releases) updates it. |
+| **Short description** | Up to 300 characters, shown on product cards and under the title. |
+| **Description** | The main text. Markdown is supported. |
+| **Features** | A checklist shown on the product page. |
+| **FAQ** | Questions and answers shown on the product page. |
+
+### Pricing
+
+Each product can be sold with up to four plans:
+
+| Plan | Access |
+| --- | --- |
+| **Lifetime** | Forever. **Required** on every product. |
+| **Yearly** | One calendar year. |
+| **Monthly** | One calendar month. |
+| **Daily** | One day. |
+
+Leave a timed plan empty to not offer it. Prices are in the store currency set in [Store settings](/docs/guide/features/store-settings); use only the decimals your currency allows.
+
+Buying a timed plan again, or several at once, adds another period of access for each one. Any lifetime purchase gives lifetime access. Daily, monthly and yearly plans paid by card can also [renew automatically](/docs/guide/features/subscriptions).
+
+### Visibility
+
+| Field | What it does |
+| --- | --- |
+| **Listed in the store** | Off hides the product, like archiving it. |
+| **Sold per seat** | Sells team licenses. See [Seats](#seats). |
+| **Gift card** | Makes the product a gift card. See [Gift cards](/docs/guide/features/gift-cards-and-credit). |
+| **How devices are counted** | See [Devices](#devices). |
+| **Devices per owner** | Lets owners of this product use more devices than the store default. Empty uses the store default. |
+| **Feature keys** | See [Feature keys](#feature-keys). |
+| **Category** | Groups products in the shop's category filter. |
+| **Tags** | Comma separated. Used by the shop search. |
+
+### Images
+
+Upload JPG, PNG, GIF or WebP images (up to 5 MB each, up to 20 per product). The first one is the **Cover**, used on product cards. To change the order, remove images and add them again.
+
+<Callout type="warn" title="New products are announced by email">
+  When email is configured, creating a product emails every customer that a new product is available, even if it isn't listed yet. Archiving or unlisting a product emails its owners that it is no longer available.
+</Callout>
+
+## Archive a product
+
+**Archive** on the product's page removes it from the store. Customers who own it keep their licenses and downloads. To bring it back, turn **Listed in the store** on again and save. Products are never deleted.
+
+## Bundles and upsells
+
+The **Bundles and upsells** card on the product form holds three tools.
+
+### Bundles
+
+Pick the products under **Products in this bundle** (up to 20). Buying the bundle grants each of them with the bundle's plan and quantity, and refunding it removes them all. Price the bundle below the sum of its parts: the product page shows what's included and the saving.
+
+A bundle can't be a gift card or sold per seat, and can't contain gift cards or other bundles.
+
+<Callout type="warn" title="License keys for bundles">
+  Generate license keys for the products inside a bundle, not for the bundle itself: a key for the bundle unlocks the bundle product only, not its contents.
+</Callout>
+
+### Volume discounts
+
+Lower the price per unit for bigger orders. Each tier has a minimum number of units (2 to 100) and a percent off (1 to 90), up to five tiers. Tiers count units of the same product and plan in one order, and the tier with the highest quantity reached applies, so give higher quantities bigger discounts.
+
+The product page shows a "Buy more, save more" table, and the cart tells customers how many more units would reach the next tier. Discount codes apply on top.
+
+### Frequently bought together
+
+Pick up to eight products to suggest with this one. Your picks come first in the product page's "You might also like" section and in the cart's "Frequently bought together" suggestions, followed by products customers often buy together.
+
+## Seats
+
+Turn on **Sold per seat** to sell team licenses:
+
+- Each unit bought is a seat for one more user. Seats run side by side, each with its own period, instead of adding time.
+- Each seat allows the **Devices per seat** (or the store default).
+- On the product page, customers pick a number of seats.
+- Buyers share their seats from **Dashboard → Teams**: they add teammates (existing accounts, by username or email), who get the product in their own account. The buyer keeps one seat, so they can add one teammate fewer than their seats. When seats lapse or are refunded, the most recently added teammates lose access first.
+
+Turning **Sold per seat** on or off recalculates the access of everyone who owns the product. A seat product can't be a gift card or a bundle.
+
+## Devices
+
+**How devices are counted** decides how a product's device limit works. The store-wide limits are in **Store settings → Security** (2 devices and 3 IP addresses per customer by default).
+
+| Mode | How it works |
+| --- | --- |
+| **Account devices** (default) | Devices count toward the customer's account. The highest limit among their products applies, and never less than the store default. |
+| **Its own devices** | Each device that runs this product takes one of the product's own places, separate from the account's devices. |
+| **Floating (devices at a time)** | Any device can use the product, up to the limit at the same time. A device that stops checking in frees its place. |
+
+For **Its own devices** and **Floating**, loaders must send the product ID, which the 2.0 SDKs do. Loaders built for 1.8 don't, so for them only the account's device limit applies.
+
+For floating products, a device keeps its place for **Store settings → Security → Floating lease length** (15 minutes by default) without checking in. The SDKs check in at a third of it while the developer's heartbeat runs.
+
+<Callout type="warn" title="Changing the mode resets places">
+  Switching an existing product to another mode clears the device places its owners had for it.
+</Callout>
+
+When a customer's device limit drops (fewer seats, a lower store limit), the most recently added account devices past it stop getting access until the customer removes a device. Customers manage their devices from **Account** (see [Customer dashboard](/docs/guide/features/customer-dashboard#devices-and-networks)).
+
+## Feature keys
+
+List comma-separated keys such as `export` or `maps.premium`. Owners of the product get them in their signed license tokens, so your software can check `can("export")` instead of product IDs. Keys use lowercase letters, digits, dots, dashes and underscores, up to 20 per product. Only loaders using the 2.0 license tokens see them; see the [client API](/docs/api/client-api).
+
+## Releases
+
+When you ship a new version, open the product in the dashboard and click **Publish release**:
+
+| Field | What it does |
+| --- | --- |
+| **Version** | Becomes the product's current version. Each version can be published once. |
+| **What's new** | Release notes, in Markdown. |
+| **Email owners** | Emails everyone who owns the product now (teammates included) the notes and a link to their dashboard. On by default. |
+
+The **Releases** card on the product's page lists every version, newest first, with an **Emailed** badge on the ones that were announced. Upload the new files in [Files](/docs/guide/features/files) as usual.

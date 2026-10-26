@@ -1,0 +1,58 @@
+---
+title: Invoices and tax
+description: Numbered invoices, credit notes for refunds, and VAT or sales tax with Stripe Tax.
+---
+
+## Invoices
+
+Every paid order gets an invoice with a sequential number, such as `INV-000042`. Free orders and orders paid entirely with store credit don't get one. Renewals and paid plan switches get their own.
+
+Set what invoices show in **Store settings → Billing → Invoices**:
+
+| Setting | What it does |
+| --- | --- |
+| **Legal name** | Your business name. The store name is used when empty. |
+| **VAT or tax ID** | Printed under your name. |
+| **Business address** | Printed under your name. |
+| **Billing email** | Contact address on invoices. The support email is used when empty. |
+| **Invoice number prefix** | `INV-` by default. Numbers continue from the last invoice, without gaps. |
+| **Invoice footer** | Registration details, payment terms or a thank-you note. |
+| **Credit note prefix** | `CN-` by default. Credit notes have their own numbers. |
+
+Invoices always show your **current** billing settings, so fill them in before you start selling.
+
+The buyer's details come from the card checkout (with Stripe Tax on, Stripe collects the billing address) or from the billing details in their account.
+
+### Where to find them
+
+- **Customers**: **Dashboard → Purchases** has an **Invoice** link under each paid order. The receipt email links it too.
+- **Admins** with the **Orders** area: open the order in **Dashboard → Orders**.
+
+Invoices open as a printable page with **Print or save as PDF**.
+
+## Credit notes
+
+Invoices are never changed. When an invoiced order is refunded, it gets a credit note instead, with its own number that references the invoice:
+
+- A **full refund** at Stripe or PayPal, or **Revoke access** on the order, issues a credit note for the whole amount (or what is left after partial refunds).
+- Each **partial refund** at Stripe or PayPal issues a credit note for the refunded amount, with tax credited in proportion. The order and its access stay.
+- Disputes don't issue credit notes.
+
+Customers find credit notes next to the invoice in **Dashboard → Purchases**.
+
+## Stripe Tax
+
+Stripe Tax calculates VAT or sales tax at **card** checkout. Set up your tax registrations in the Stripe Dashboard first, then open **Store settings → Billing → Tax**:
+
+| Setting | What it does |
+| --- | --- |
+| **Calculate tax with Stripe Tax** | Checkout asks for the buyer's address and adds VAT or sales tax where you're registered. |
+| **Prices include tax** | Tax is taken from your prices (common in the EU) instead of added on top. Only applies with Stripe Tax on. |
+| **Collect VAT IDs** | Business buyers can enter a VAT or tax ID at card checkout; it's printed on their invoice. |
+
+Tax is stored on each order and shown on its invoice. Revenue in [Analytics](/docs/guide/features/analytics) excludes tax.
+
+<Callout type="warn" title="What Stripe Tax doesn't cover">
+  - PayPal and crypto orders never get tax.
+  - While Stripe Tax is on, **store credit can't pay for any order**, whatever the payment method: Stripe would compute tax after the credit. Customers keep their balance and can use it again if you turn Stripe Tax off.
+</Callout>

@@ -1,0 +1,45 @@
+---
+title: Customers
+description: Manage customer accounts, bans, devices and products, and use the Discord bot.
+---
+
+## Users
+
+**Dashboard → Users** (under **Customers**) lists every account with its role, status, products and join date. Admins need the **Users** area. Search by name or email, or filter by role and status. Accounts created by guest checkout that haven't set a password yet are marked **Guest**.
+
+Open an account to see its products and expiry dates, orders, licenses, bound IP addresses and devices, Discord link and PIN status.
+
+| Action | What it does | Who |
+| --- | --- | --- |
+| **Grant product** | Unlocks a product with a plan, without a purchase. A license is created and redeemed on the account, extending any access they already have. | Licenses area |
+| **Reset** IP addresses or devices | Clears the bindings so the customer can bind new ones. No cooldown; the customer is emailed. You can also remove single devices. | Users area |
+| **Store credit** | Add or remove credit, with a reason the customer sees. | Users area |
+| **Ban** / **Unban** | A banned customer is signed out everywhere, can't sign in, can't download, and their subscriptions end. The optional reason is shown when they try to sign in. | Users area |
+| **Delete** | Removes the account and its access permanently, and ends its subscriptions, team places and reseller status. Purchase records are kept. | Users area |
+| **Make admin** / **Remove admin** | Changes the role. See [Admin roles and permissions](/docs/guide/security#admin-roles-and-permissions). | Owner |
+| **Permissions** | Limits an admin to some areas. | Owner |
+
+Only customers can be banned or deleted: remove an admin's role first. The owner account can't be changed.
+
+## Discord bot
+
+Moonbase includes an optional Discord bot. Create an application and bot in the [Discord Developer Portal](https://discord.com/developers/applications), invite it to your server, then set in `api/.env`:
+
+```dotenv
+USE_DISCORD_BOT=true
+TOKEN=your_bot_token
+CLIENT_ID=your_application_id
+GUILD_ID=your_server_id
+```
+
+Restart the API. The bot registers its commands in that server:
+
+- `/link email pin`: customers link their Discord account to their store account, using the **Account PIN** from their account page. Five wrong PINs lock linking for 15 minutes.
+- `/unlink`: removes the link.
+- Right-click a member → **Apps**: **User Info**, **Reset HWID**, **Reset IP** and **Ban User**, for Discord administrators by default. They act on the linked store account and are recorded in the [activity log](/docs/guide/security#activity-log).
+
+The bot also sends customers a direct message (and an email) when a product is about to expire.
+
+### Sign in with Discord
+
+Customers who linked Discord can sign in with it. Set `NEXT_PUBLIC_DISCORD_CLIENT_ID` and `NEXT_PUBLIC_DISCORD_REDIRECT_URI` in `app/.env` (then rebuild the app), add the redirect URI (for example `https://store.example.com/auth`) to your Discord application's OAuth2 redirects, and set `DISCORD_OAUTH_CLIENT_ID` in `api/.env` if the sign-in application isn't the bot's. See [Configuration](/docs/guide/setup#discord).

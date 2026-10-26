@@ -1,0 +1,124 @@
+---
+title: Discounts and creators
+description: Create discount codes, share them as links, and pay creators a commission on the sales their codes bring in.
+---
+
+Discount codes live in **Dashboard → Discounts** and creator payouts in **Dashboard → Creators**, both under **Marketing**. Admins need the **Marketing** area to see them.
+
+## Discount codes
+
+Open **Dashboard → Discounts** and click **New code**.
+
+| Field | What it does |
+| --- | --- |
+| **Code** | What customers type at checkout. 3 to 32 letters, numbers, dashes and underscores; stored in capitals. **Generate** makes a random 8-character code. |
+| **Discount** | **Percentage** (1 to 100 percent) or **Fixed amount** in your store currency. |
+| **Applies to** | **Every product**, or **Specific products** (up to 200). You can also limit it to plans: Daily, Monthly, Yearly, Lifetime. No plan selected means every plan. |
+| **Minimum order** | Smallest cart subtotal the code accepts, after volume discounts. |
+| **Total uses** | How many times the code can be used in all. Empty means unlimited. |
+| **Uses per customer** | How many times each customer can use it. New codes start at **1**. |
+| **Starts** / **Ends** | Optional schedule, in your time zone. Empty means it starts now and never ends. |
+| **Creator** | Makes it a [creator code](#creator-codes). |
+| **Internal note** | Only admins see it. |
+| **Active** | Turn off to pause the code without deleting it. |
+
+The list shows each code's uses (including **in checkout** while a customer is paying), how much it has given away, and its status: **Active**, **Scheduled**, **Ended**, **Used up** or **Off**.
+
+### Share a code as a link
+
+Click **Copy link** on a code, or add `?coupon=CODE` to any store address, for example:
+
+```text
+https://store.example.com/shop?coupon=SUMMER25
+```
+
+The visitor sees "Discount code SUMMER25 will be applied at checkout", and the code is filled in at checkout. They can also type it in the **Have a discount code?** field.
+
+### How codes combine
+
+- Codes apply **on top of volume discounts**.
+- **Gift card** products never get a code discount.
+- **Store credit** is applied after the code.
+- Codes don't apply to **wholesale** orders from resellers.
+- An order that a code makes completely free is delivered without payment. Free orders need the customer to be signed in.
+- On a subscription, the code only discounts the **first payment**; renewals are charged the full price.
+
+### Limits while customers pay
+
+A code with a usage limit reserves one use when a checkout starts. The use is held for up to 24 hours (longer while a bank payment is still being confirmed), and given back if the payment fails or the checkout expires. For Stripe, send `checkout.session.expired` to the webhook so abandoned checkouts release their code right away (see [Stripe](/docs/guide/payments/stripe#webhook-events)).
+
+Customers who type 20 wrong codes within 15 minutes are blocked for a while.
+
+<Callout type="info" title="Changing the store currency">
+  A fixed-amount code is tied to the currency it was created in. If you change the store currency, create the code again.
+</Callout>
+
+Deleting a code doesn't change past orders: they keep their discount.
+
+## Creator codes
+
+A creator code is a discount code that also pays a person (a streamer, a partner) a commission on every paid order that uses it.
+
+<Steps>
+  <Step>
+    ### Give a code a creator
+
+    In **Dashboard → Discounts**, create or edit a code and open **Creator**. Pick the creator's account (search by username or exact email) and set the **Commission** in percent (1 to 90).
+
+    Turn on **Also earn on renewals** if the creator should also earn on every renewal of subscriptions started with the code.
+  </Step>
+  <Step>
+    ### Share it
+
+    The creator now sees **Creator earnings** in their dashboard, with their codes, a **Share link** for each, and every commission they earned.
+  </Step>
+  <Step>
+    ### Pay them
+
+    When commissions are ready, record the payout in **Dashboard → Creators** (see [Payouts](#payouts)).
+  </Step>
+</Steps>
+
+### How commission is calculated
+
+- It is a share of the amount actually **charged**, without tax and minus partial refunds. The part paid with store credit doesn't count.
+- Free orders and creators buying with their own code earn nothing.
+- When [creator tiers](#creator-tiers) are set, the creator earns the higher of the code's rate and their tier's rate.
+
+### Commission hold
+
+Commissions wait before they can be paid, so a refund can still cancel them. Set the wait in **Store settings → Security → Commission hold** (14 days by default, 0 to 365).
+
+| Status | Meaning |
+| --- | --- |
+| **On hold** | Still within the hold period. |
+| **Ready to pay** | The hold is over. |
+| **Paid** | Included in a payout you recorded. |
+| **Voided** | The order was fully refunded or disputed before payout. |
+| **Refunded after payout** | The order was refunded after you already paid the creator. |
+
+A partial refund lowers an unpaid commission. A won dispute puts the commission back on hold.
+
+### Creator tiers
+
+Reward creators who sell more. In **Store settings → Security → Creator tiers**, click **Add tier** and set:
+
+- **From sales of**: the sales a creator's codes must have brought in, in your store currency.
+- **Commission %**: the rate from then on (1 to 90).
+
+You can add up to five tiers. Sales are counted without tax, and refunded orders don't count. Once a creator reaches a tier, their next orders earn the tier's rate, or the code's own rate when that is higher. Creators see their current tier and how far the next one is on their **Creator earnings** page.
+
+### Payouts
+
+**Dashboard → Creators** lists every creator with what is **On hold**, **Ready to pay** and **Paid out**.
+
+1. Send the money yourself (PayPal, bank transfer…).
+2. Click **Record payout** next to the creator, add a payment reference if you like, and click **Mark as paid**. Every commission that is ready to pay is marked as paid.
+
+Or turn on **Pay as store credit** to add the amount to the creator's [store credit](/docs/guide/features/gift-cards-and-credit) instead of paying them outside the store.
+
+<Callout type="warn" title="Store credit and Stripe Tax">
+  Store credit can't be spent while Stripe Tax is on. If you use Stripe Tax, pay creators outside the store.
+</Callout>
+
+Admins can't record payouts to themselves or make themselves the creator of a code. Only the owner can.

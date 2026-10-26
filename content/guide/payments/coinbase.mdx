@@ -1,43 +1,62 @@
 ---
-title: Coinbase Setup
-description: Configure Coinbase Commerce keys and webhook events.
+title: Coinbase Commerce
+description: Accept crypto payments with Coinbase Commerce.
 ---
 
 <Steps>
   <Step>
-    ### 1. Create a Commerce wallet
+    ### Create a Commerce wallet
 
-    Sign up at https://beta.commerce.coinbase.com/payments.
+    Sign up at [Coinbase Commerce](https://beta.commerce.coinbase.com/payments) and create a wallet.
   </Step>
   <Step>
-    ### 2. Set your business name
+    ### Set your business name
 
-    Configure it at https://beta.commerce.coinbase.com/settings/business.
+    Set it in [Settings → Business](https://beta.commerce.coinbase.com/settings/business). Without it, crypto checkouts fail.
   </Step>
   <Step>
-    ### 3. Copy your API key
+    ### Copy your API key
 
-    Get it from https://beta.commerce.coinbase.com/settings/security.
-  </Step>
-  <Step>
-    ### 4. Create a webhook endpoint
+    Create an API key in [Settings → Security](https://beta.commerce.coinbase.com/settings/security) and put it in `api/.env`:
 
-    Get the webhook secret from https://beta.commerce.coinbase.com/settings/notifications.
-
-    Add an endpoint pointing to:
-
-    ```
-    http://<your-host>:80/api/purchase/webhook/coinbase
+    ```dotenv
+    COINBASE_COMMERCE_API_KEY=...
     ```
   </Step>
   <Step>
-    ### 5. Enable required events
+    ### Add a webhook endpoint
 
-    - `charge:confirmed`
-    - `charge:failed`
+    In [Settings → Notifications](https://beta.commerce.coinbase.com/settings/notifications), click **Add an endpoint** and use this URL:
+
+    ```text
+    https://<your API URL>/api/purchase/webhook/coinbase
+    ```
+
+    Enable the events in [Webhook events](#webhook-events), then copy the webhook shared secret into `api/.env`:
+
+    ```dotenv
+    COINBASE_COMMERCE_WEBHOOK_SECRET=...
+    ```
+
+    Crypto is offered at checkout only when both values are set. Restart the API.
   </Step>
 </Steps>
 
-<Callout type="note" title="Public endpoint required">
-  Coinbase must be able to reach your webhook URL. Use your public host or domain.
+## Webhook events
+
+| Event | Required | What Moonbase does |
+| --- | --- | --- |
+| `charge:confirmed` | Yes | Delivers the order. |
+| `charge:failed` | Yes | Marks the order failed, releases its discount code and store credit, and tells the customer the payment failed. |
+| `charge:delayed` | Yes | Marks the order pending and keeps its discount code and store credit reserved. Nothing is delivered. |
+| `charge:pending` | Optional | Keeps the discount code and store credit reserved while the payment confirms on the blockchain. |
+
+## Good to know
+
+- Coinbase sends `charge:delayed` when a payment arrives after the charge expired. Moonbase doesn't deliver these on its own: check the payment in Coinbase Commerce, then refund it there or [grant the license by hand](/docs/guide/features/orders-and-licenses#grant-a-license).
+- Coinbase refunds and disputes don't reach Moonbase. If you refund a crypto payment, use **Revoke access** on the order in **Dashboard → Orders**.
+- Crypto payments are always one-time and never get tax from Stripe Tax.
+
+<Callout type="info" title="Public endpoint required">
+  Coinbase must be able to reach the webhook URL over the internet. Use your public HTTPS API address, not `localhost`.
 </Callout>

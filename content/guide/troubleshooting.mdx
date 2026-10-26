@@ -1,28 +1,126 @@
 ---
 title: Troubleshooting
-description: Fix common setup and launch issues.
+description: Fix the most common installation, payment, download and sign-in problems.
 ---
 
-Before digging deeper, verify these basics:
-- The API process is running and showing no startup errors.
-- Your keys are saved correctly in `app/.env`.
-- You rebuilt the app after changing `.env` values.
+Before digging deeper, check the basics:
 
-<Accordions type="single" collapsible>
-  <Accordion title="Dashboard login fails after setup">
-    **Cause:** The batch file sometimes fails when invoking the `npm` process.
+- The API is running and its console shows `API is now ready to use on port …` with no errors above it.
+- `PUBLIC_API_KEY` and `PRIVATE_API_KEY` are set in `app/.env`.
+- You ran the installer again after changing a `NEXT_PUBLIC_*` value.
 
-    **Fix:** Run both services manually:
+## Installation and start
 
-    ```bash
-    cd app
-    npm run build
-    npm run start
-    ```
+<Accordions type="single">
+  <Accordion title="Invalid environment configuration">
+    The API lists each missing or invalid value under the message. Compare `api/.env` with `api/.env.example` and fix every line it names. See [Configuration](/docs/guide/setup).
+  </Accordion>
+  <Accordion title="The API refuses the example ENCRYPT_KEY or JWT_SECRET">
+    The API never starts with the example values (`replace_with_random_…`).
 
-    ```bash
-    cd api
-    node index.js
-    ```
+    - **New store:** run the installer, or set random values yourself (see [Security](/docs/guide/security#encrypt_key-and-jwt_secret)).
+    - **Store upgraded from 1.8 with the example `ENCRYPT_KEY`:** don't replace it by hand. Move your data to a new key with [the rotation command](/docs/guide/security#moving-to-a-new-encrypt_key).
+  </Accordion>
+  <Accordion title="First startup requires APP_EMAIL, APP_USERNAME and APP_PASSWORD">
+    There is no owner account yet. Set all three `APP_*` values in `api/.env` and start the API again. Remove them once the keys are printed.
+  </Accordion>
+  <Accordion title="DASHBOARD_NOT_INITIALIZED">
+    The first start didn't finish creating the API keys. Start the API once with all three `APP_*` owner values set.
+  </Accordion>
+  <Accordion title="Port 80 is already in use">
+    Another program (often a web server such as nginx or IIS) uses the port. Change `PORT` in `api/.env`, and update `URL` in `api/.env` and `NEXT_PUBLIC_API_URL` in `app/.env` to match, then run the installer again.
+  </Accordion>
+  <Accordion title="Node.js is too old">
+    Moonbase needs Node.js 22.12 or newer. Install it from [nodejs.org](https://nodejs.org) and run the installer again.
+  </Accordion>
+  <Accordion title="Can't connect to MongoDB Atlas (mongodb+srv)">
+    Some internet providers' DNS servers fail the lookups `mongodb+srv://` addresses need, so Moonbase uses `1.1.1.1` and `8.8.8.8` by default. If those are blocked on your network, set `DNS_SERVERS=system` (or your own servers) in `api/.env`. Also check that your server's IP address is allowed in Atlas.
+  </Accordion>
+  <Accordion title="The app shows a missing API key">
+    Check `PUBLIC_API_KEY` and `PRIVATE_API_KEY` in `app/.env`, then restart the app.
+  </Accordion>
+  <Accordion title="Changed NEXT_PUBLIC_API_URL and nothing happened">
+    It is compiled into the app. Run the installer again after changing it, then restart the app.
+  </Accordion>
+  <Accordion title="npm run build fails in the app folder">
+    The installer removes the build tools after building. Run the installer again instead of `npm run build`.
   </Accordion>
 </Accordions>
+
+## Payments
+
+<Accordions type="single">
+  <Accordion title="A payment method doesn't appear at checkout">
+    A provider only appears when all of its values are set in `api/.env`: Stripe needs `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`; PayPal needs `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` and `PAYPAL_WEBHOOK_ID`; Coinbase needs `COINBASE_COMMERCE_API_KEY` and `COINBASE_COMMERCE_WEBHOOK_SECRET`. Restart the API after changing them.
+  </Accordion>
+  <Accordion title="An order stays Processing">
+    Wait five minutes, then open the order in **Dashboard → Orders** and click **Retry fulfillment**. Retrying never delivers a payment twice.
+  </Accordion>
+  <Accordion title="Renewals are charged but access doesn't extend">
+    The Stripe endpoint is missing the `invoice.*` and `customer.subscription.*` events, or uses an API version older than `2025-03-31`. See [Stripe](/docs/guide/payments/stripe#webhook-events).
+  </Accordion>
+  <Accordion title="Refunds don't remove access">
+    Check that the provider sends its refund and dispute events (see [Payments](/docs/guide/payments)) and that **Store settings → Security → Revoke access on refunds and disputes** is on. Coinbase refunds never reach Moonbase: use **Revoke access** on the order.
+  </Accordion>
+  <Accordion title="PayPal webhook rejected">
+    Check `PAYPAL_WEBHOOK_ID`, the webhook URL, and that the credentials, the webhook and `PAYPAL_MODE` are all sandbox or all live.
+  </Accordion>
+  <Accordion title="The API log warns about the Stripe API version">
+    Your Stripe webhook endpoint uses a different API version from Moonbase's. Create a new endpoint on the version the warning names, with the same URL and events, put its signing secret in `STRIPE_WEBHOOK_SECRET`, then delete the old endpoint.
+  </Accordion>
+  <Accordion title="Store credit can't be used at checkout">
+    Store credit is turned off while Stripe Tax is on (**Store settings → Billing**). It also can't pay for gift cards, and guests must sign in to use it.
+  </Accordion>
+</Accordions>
+
+## Downloads and files
+
+<Accordions type="single">
+  <Accordion title="A download returns 403">
+    The customer is banned or no longer has active access to that product. A download link also expires after a few minutes: click **Download** again.
+  </Accordion>
+  <Accordion title="A download returns FILE_NOT_FOUND_ON_DISK">
+    The file is not in the storage folder (`api/storage/` or `STORAGE_DIR`). Copy the old storage folder's files into it, or upload the file again. **Dashboard → Files** lists missing files under **Storage health**.
+  </Accordion>
+  <Accordion title="A download returns FILE_INTEGRITY_ERROR">
+    The stored file is smaller or larger than the uploaded one, or its content changed. The API log says which file. Restore it from a backup or upload it again.
+  </Accordion>
+  <Accordion title="Large uploads fail">
+    Raise **Store settings → Uploads → Maximum file size**, and your reverse proxy's upload limit and timeouts on both the app and the API (see [Uploads and downloads](/docs/guide/operations#uploads-and-downloads)). Cloudflare's Free and Pro plans stop uploads over 100 MB.
+  </Accordion>
+</Accordions>
+
+## Customers and sign-in
+
+<Accordions type="single">
+  <Accordion title="Customer IPs all look the same">
+    For loaders, set `TRUST_PROXY_HOPS` in `api/.env` to the number of proxies in front of the API. For browsers, set `PRIVATE_API_KEY` in `app/.env` to the API's private key. See [Reverse proxy](/docs/guide/operations#reverse-proxy).
+  </Accordion>
+  <Accordion title="TOO_MANY_ATTEMPTS when signing in to one account">
+    The account had 20 failed sign-ins within 15 minutes. It unlocks by itself. See [Rate limits](/docs/guide/security#rate-limits).
+  </Accordion>
+  <Accordion title="No emails arrive">
+    Check the `EMAIL_*` values in `api/.env` and the API log. If you have no SMTP server, leave `EMAIL_HOST` empty so Moonbase knows email is off.
+  </Accordion>
+  <Accordion title="A loader says the device limit is reached">
+    The customer can remove a device or reset their devices from **Account** in their dashboard (after the reset cooldown), or an admin can reset them from the customer's page in **Dashboard → Users**.
+  </Accordion>
+  <Accordion title="Sign up fails because the password check is unavailable">
+    `PASSWORD_BREACH_CHECK_STRICT=true` refuses new passwords while Have I Been Pwned can't be reached. Wait, or set it to `false`.
+  </Accordion>
+</Accordions>
+
+## Other
+
+<Accordions type="single">
+  <Accordion title="The dashboard never says whether an update is available">
+    The marketplace page often refuses automated requests. Check for new versions on BuiltByBit yourself.
+  </Accordion>
+  <Accordion title="Webhooks to my own server on this machine fail">
+    Outgoing webhooks refuse `localhost` and private network addresses. Set `WEBHOOKS_ALLOW_PRIVATE_NETWORKS=true` in `api/.env` and restart the API.
+  </Accordion>
+</Accordions>
+
+<Callout type="warn" title="Asking for help">
+  Never paste secrets, customer tokens, payment payloads or license keys into a support ticket or a public channel.
+</Callout>

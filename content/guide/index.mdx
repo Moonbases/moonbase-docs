@@ -1,47 +1,67 @@
 ---
 title: Moonbase Guide
-description: Install, configure, and run Moonbase with payments ready.
+description: Install, configure and run your Moonbase 2.0 store.
 ---
 
-import { CreditCard, LifeBuoy, Rocket } from 'lucide-react';
+import { BookOpen, CreditCard, LifeBuoy, Rocket, Store } from 'lucide-react';
 
-Moonbase is self-hosted, so your docs map directly to the server you run. Use the pages below to install, set up keys, and launch the app.
+Moonbase is a self-hosted storefront and license-delivery system for digital products. You run two parts on your own server: the **API** (with MongoDB) that handles licenses, payments and downloads, and the **app**, the storefront and dashboard your customers and staff use. Customers pay with Stripe, PayPal or Coinbase Commerce and get their license and downloads at once.
 
-<Callout type="info" title="Self-hosted details">
-  Your base URL is the host where you run Moonbase. API keys are printed once in the server console on first startup.
+This guide is for store owners: installing Moonbase, keeping it running, and using every feature from the dashboard. Building loaders and integrations is covered in the [API documentation](/docs/api), and extending Moonbase in the [plugin documentation](/docs/plugin).
+
+<Callout type="info" title="Moonbase 2.0">
+  This guide covers Moonbase 2.0.0. Coming from 1.8? Start with [Upgrading from 1.8](/docs/guide/upgrading).
 </Callout>
 
 ## <Rocket className="inline size-4" /> Get started
 
 <Cards>
-  <Card
-    title="Installation via GitHub"
-    href="/docs/guide/installation"
-    description="Get access, clone the repo, and stay updated."
-  />
-  <Card
-    title="Initial setup"
-    href="/docs/guide/setup"
-    description="Install dependencies, start the API, and save your keys."
-  />
-  <Card
-    title="Build and run"
-    href="/docs/guide/operations"
-    description="Rebuild the app and launch the API + frontend."
-  />
+  <Card title="Installation" href="/docs/guide/installation" description="Requirements, the BuiltByBit package, and GitHub access." />
+  <Card title="Configuration and first start" href="/docs/guide/setup" description="Fill in both .env files, create the owner account and save your API keys." />
+  <Card title="Operations" href="/docs/guide/operations" description="Process managers, rebuilding, reverse proxy, backups and updates." />
+  <Card title="Upgrading from 1.8" href="/docs/guide/upgrading" description="The step-by-step upgrade, webhook changes and what's new." />
+  <Card title="Security" href="/docs/guide/security" description="ENCRYPT_KEY rotation, admin permissions, API keys and rate limits." />
 </Cards>
 
 ## <CreditCard className="inline size-4" /> Payments
 
 <Cards>
-  <Card title="Payments overview" href="/docs/guide/payments" description="Connect Stripe, Coinbase, or PayPal." />
-  <Card title="Stripe setup" href="/docs/guide/payments/stripe" description="Create a webhook and enable checkout events." />
-  <Card title="Coinbase setup" href="/docs/guide/payments/coinbase" description="Configure Commerce keys and webhook events." />
-  <Card title="PayPal setup" href="/docs/guide/payments/paypal" description="Create a REST app and subscribe to capture events." />
+  <Card title="Payments overview" href="/docs/guide/payments" description="Which provider supports what, and the webhook URLs." />
+  <Card title="Stripe" href="/docs/guide/payments/stripe" description="Cards, subscriptions, Stripe Tax and the customer portal." />
+  <Card title="PayPal" href="/docs/guide/payments/paypal" description="REST app, webhook ID and dispute events." />
+  <Card title="Coinbase Commerce" href="/docs/guide/payments/coinbase" description="Crypto payments and charge events." />
+</Cards>
+
+## <Store className="inline size-4" /> Running your store
+
+<Cards>
+  <Card title="Store settings" href="/docs/guide/features/store-settings" description="Branding, renewals, license limits, uploads, emails and billing." />
+  <Card title="Products" href="/docs/guide/features/products" description="Plans, bundles, volume discounts, seats, devices and releases." />
+  <Card title="Files and downloads" href="/docs/guide/features/files" description="Uploads, storage limits and storage health." />
+  <Card title="Orders and licenses" href="/docs/guide/features/orders-and-licenses" description="Retry delivery, revoke access, generate and grant keys." />
+  <Card title="Storefront and checkout" href="/docs/guide/features/checkout" description="Checkout options, guest checkout and checkout reminders." />
+  <Card title="Subscriptions" href="/docs/guide/features/subscriptions" description="Automatic renewal, plan switches and the grace period." />
+  <Card title="Invoices and tax" href="/docs/guide/features/invoices-and-tax" description="Invoice numbers, credit notes and Stripe Tax." />
+  <Card title="Discounts and creators" href="/docs/guide/features/discounts-and-creators" description="Discount codes, share links, commissions and payouts." />
+  <Card title="Gift cards and store credit" href="/docs/guide/features/gift-cards-and-credit" description="Sell or give away gift cards; customers pay with credit." />
+  <Card title="Resellers" href="/docs/guide/features/resellers" description="Wholesale terms, bulk keys and reseller API keys." />
+  <Card title="Reviews" href="/docs/guide/features/reviews" description="Verified reviews, moderation and replies." />
+  <Card title="Support tickets" href="/docs/guide/features/support-tickets" description="Customers contact you; you answer from an inbox." />
+  <Card title="Webhooks" href="/docs/guide/features/webhooks" description="Signed events for your systems, or sales in Discord." />
+  <Card title="Analytics and overview" href="/docs/guide/features/analytics" description="Revenue, orders, top products and the setup guide." />
+  <Card title="Customers" href="/docs/guide/features/customers" description="Accounts, bans, devices, granting products and the Discord bot." />
+  <Card title="Customer dashboard" href="/docs/guide/features/customer-dashboard" description="What customers see: downloads, devices, teams and more." />
+</Cards>
+
+## <BookOpen className="inline size-4" /> For developers
+
+<Cards>
+  <Card title="API documentation" href="/docs/api" description="License tokens, client SDKs, the admin API with API keys, and the reseller API." />
+  <Card title="Plugin documentation" href="/docs/plugin" description="Extend the API and the storefront with plugins." />
 </Cards>
 
 ## <LifeBuoy className="inline size-4" /> Help
 
 <Cards>
-  <Card title="Troubleshooting" href="/docs/guide/troubleshooting" description="Fix the most common setup issues." />
+  <Card title="Troubleshooting" href="/docs/guide/troubleshooting" description="Fix the most common setup, payment and download problems." />
 </Cards>

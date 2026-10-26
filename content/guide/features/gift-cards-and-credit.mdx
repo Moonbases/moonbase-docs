@@ -1,0 +1,72 @@
+---
+title: Gift cards and store credit
+description: Sell or give away gift cards, and let customers pay with store credit.
+---
+
+A gift card is a code worth an amount of store credit. Customers redeem it in their account and spend the credit at checkout. Store credit also comes from refunds, creator payouts and adjustments you make.
+
+## Sell gift cards
+
+Create a product and turn on **Gift card** in the product form (see [Products](/docs/guide/features/products)).
+
+- Give it a **Lifetime** price only. That price is the card's value.
+- Each unit bought emails the buyer its own code, worth the price paid.
+- Discount codes and store credit don't apply to gift card products.
+- Codes bought this way never expire.
+
+## Give gift cards away
+
+Open **Dashboard → Gift cards** (under **Marketing**) and click **Issue gift cards**:
+
+| Field | What it does |
+| --- | --- |
+| **Amount** | Value of each card, in your store currency (0.50 to 10,000). |
+| **How many** | 1 to 100 cards at once. |
+| **Note** | For you, e.g. "Discord giveaway". |
+| **Expires** | Optional end date. Leave empty for codes that never expire. |
+
+Click **Issue**, then **Copy codes**. You can find the codes on this page later.
+
+The list shows every card with its **Source** ("Bought by" a customer or "Issued by the store"), who redeemed it, and its status: **Active**, **Redeemed** or **Disabled**. **Disable** stops a card that hasn't been redeemed yet; **Enable** turns it back on.
+
+Codes look like `XXXX-XXXX-XXXX-XXXX`. Customers can type them in lower case and without dashes.
+
+## How customers redeem a card
+
+Customers open **Account** in their dashboard, go to **Store credit**, enter the code in **Redeem a gift card** and click **Redeem**. The full amount is added to their balance. Each card works once.
+
+The same section shows their **Balance** and **History**: gift cards redeemed, credit spent on orders, credit returned from unpaid checkouts, refunds, creator payouts and adjustments.
+
+Customers who enter 20 wrong codes within 15 minutes are blocked for a while.
+
+## Paying with store credit
+
+At checkout, customers with a balance see **Use store credit (… available)**.
+
+- Credit pays as much of the order as it can; the rest goes to the payment provider.
+- If credit covers everything, there is no payment page: the button reads **Pay with store credit** and the order completes at once.
+- Credit never pays for gift cards. It also never leaves less than 0.50 to pay, the smallest amount a provider can charge.
+- Credit is held while the customer pays, and given back if the payment fails or the checkout expires.
+- A full refund of the order gives the credit back.
+- Guests must sign in to use credit.
+
+<Callout type="warn" title="Stripe Tax turns store credit off">
+  While **Store settings → Billing → Calculate tax with Stripe Tax** is on, store credit can't pay for any order, whatever the payment method. Stripe would compute tax after the credit, so the credit would be taxed as a payment. Customers keep their balance; they can spend it again if you turn Stripe Tax off.
+</Callout>
+
+## Adjust a customer's balance
+
+Open the customer in **Dashboard → Users** and use the **Store credit** card: enter an **Amount** (negative to remove credit) and a **Reason** the customer will see, then click **Apply**. This needs the **Users** area. An adjustment can't take a balance below zero, and admins can't adjust their own balance (the owner can).
+
+## Refunded gift cards
+
+When a gift card order is fully refunded or disputed:
+
+- cards that weren't redeemed yet are disabled;
+- cards that were already redeemed have their full value taken back from the customer who redeemed them, **even below zero**.
+
+A negative balance can't be spent. It shows as "Refunded gift card" in the customer's history, and new credit fills it first.
+
+<Callout type="info" title="Currency">
+  Credit is kept in the store currency. If you change the currency, existing balances can no longer be spent.
+</Callout>

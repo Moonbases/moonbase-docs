@@ -1,0 +1,84 @@
+---
+title: Store settings
+description: Branding, renewals, reviews, guest checkout, license limits, uploads, emails and invoices.
+---
+
+**Dashboard → Store settings** (under **System**) holds the settings for the whole store. Only the owner can open it. Change what you need, then save; **Discard** drops unsaved changes.
+
+Settings are stored in the database. `api/settings.json` is only read on the very first start, to seed them; changing it later has no effect.
+
+## General
+
+### Store details
+
+Shown on the storefront, in page titles and in emails.
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| **Store name** | Moonbase | Up to 60 characters. |
+| **Currency** | USD | Three-letter ISO code, e.g. `USD` or `EUR`, used for every price. Changing it later leaves fixed-amount discount codes and existing store credit unusable, and analytics only adds up orders in the current currency. |
+| **Description** | "Digital products, delivered instantly." | Used on the home page and for search engines. Up to 300 characters. |
+| **Support email** | Empty | Shown to customers; receives new [support tickets](/docs/guide/features/support-tickets). |
+| **Discord invite** | Empty | A full URL to your Discord server. |
+| **Logo URL** | Empty | A square image of at least 128×128 pixels. |
+| **Brand color** | `#1c1c1c` | Used for buttons, links and highlights across the store and dashboard. |
+
+### Renewals, reviews and guest checkout
+
+Further down the **General** tab:
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| **Automatic renewal** | Customer chooses at checkout | Whether daily, monthly and yearly plans paid by card become Stripe subscriptions. See [Subscriptions](/docs/guide/features/subscriptions). |
+| **Product reviews** | Publish right away | Off, publish right away, or approve before publishing. See [Reviews](/docs/guide/features/reviews). |
+| **Grace period after a failed renewal (days)** | 3 | How long subscribers keep access while Stripe retries a failed renewal (0 to 30). |
+| **Guest checkout** | Off | Visitors pay with just an email. Needs email. See [Guest checkout](/docs/guide/features/checkout#guest-checkout). |
+
+## Security
+
+### License protection
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| **IP addresses per user** | 3 | Networks one account may use your products from (1 to 100). |
+| **Devices per user** | 2 | Devices one account may use (1 to 100). Products can allow more. |
+| **Self-service reset cooldown** | 24 | Hours between resets customers do themselves. 0 allows unlimited resets. |
+| **Keep request logs for** | 90 | Days. Logs contain IP addresses; older ones are deleted daily. 0 keeps them forever. |
+| **Commission hold** | 14 | Days before a creator's commission can be paid out, so refunds can still cancel it. |
+| **Offline window** | 24 | Hours a signed license token stays valid, so loaders keep working without reaching the API (1 to 720). |
+| **Floating lease length** | 15 | Minutes a device keeps its place in a floating product without checking in (2 to 1440). |
+| **Revoke access on refunds and disputes** | On | Removes the licenses a payment granted when it is refunded or disputed, and restores them when a dispute is won. |
+
+### Creator tiers
+
+Raise a creator's commission as their sales grow. See [Creator tiers](/docs/guide/features/discounts-and-creators#creator-tiers).
+
+## Uploads
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| **Maximum file size** | 250 MB | Largest file you can upload. |
+| **Total storage limit** | 0 | Total size of all files in MB. 0 means no limit. |
+| **Keep free on disk** | 256 MB | Uploads are refused when free disk space would drop below this. |
+
+See [Files and downloads](/docs/guide/features/files).
+
+## Emails
+
+### Checkout reminders
+
+Email customers who started a checkout but didn't pay. See [Checkout reminders](/docs/guide/features/checkout#checkout-reminders).
+
+### Email appearance
+
+The colors (**Heading**, **Background**, **Text**, **Secondary text**, **Borders**, **Button**, **Button text**) and **Footer text** of every email the store sends, with a live preview.
+
+Emails are only sent when SMTP is configured in `api/.env` (see [Email](/docs/guide/setup#email-smtp)).
+
+## Billing
+
+Your business details on invoices, credit note numbering and Stripe Tax. See [Invoices and tax](/docs/guide/features/invoices-and-tax).
+
+<Callout type="info" title="One API process">
+  The API reads store settings when it starts and keeps them up to date as you save. Run only one API process per database, or the other one won't see your changes (see [Operations](/docs/guide/operations#run-one-api-process-only)).
+</Callout>

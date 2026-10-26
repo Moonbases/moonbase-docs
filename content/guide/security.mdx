@@ -1,0 +1,186 @@
+---
+title: Security
+description: Protect your keys, control what admins and integrations can do, and see who changed what.
+---
+
+## ENCRYPT_KEY and JWT_SECRET
+
+Both live in `api/.env`.
+
+| Key | What it protects | If you change it |
+| --- | --- | --- |
+| `ENCRYPT_KEY` | License keys, gift card codes, API secrets, webhook secrets and the license signing key, stored encrypted in the database. | The stored data can no longer be read. Only change it with the [rotation command](#moving-to-a-new-encrypt_key). |
+| `JWT_SECRET` | Sign-in sessions and download links. | Everyone is signed out. Nothing else is lost. |
+
+On a new install the installer fills in random values for both. The API refuses to start with the example values (`replace_with_random_encrypt_key`, `replace_with_random_jwt_secret`): anyone who knows them could sign in as the owner or read the encrypted data. It also warns in its log when a key is shorter than 32 characters.
+
+Keep `ENCRYPT_KEY` for the life of the store and back it up with the database: a database restored without its `ENCRYPT_KEY` cannot be read.
+
+To make a random value yourself:
+
+```bash
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+### Moving to a new `ENCRYPT_KEY`
+
+Stores that ran 1.8 with the example `ENCRYPT_KEY` (or a short one) move their data to a new key once:
+
+<Steps>
+  <Step>
+    ### Stop the API and back up the database
+
+    The API must stay stopped until the last step.
+  </Step>
+  <Step>
+    ### Make a new key
+
+    Run the command above and save the new value with your backups.
+  </Step>
+  <Step>
+    ### Add it next to the old one
+
+    In `api/.env`, add it as `NEW_ENCRYPT_KEY`, and keep `ENCRYPT_KEY` as it is:
+
+    ```dotenv
+    ENCRYPT_KEY=the_key_your_data_uses_now
+    NEW_ENCRYPT_KEY=the_new_random_value
+    ```
+
+    `NEW_ENCRYPT_KEY` must be at least 32 characters.
+  </Step>
+  <Step>
+    ### Run the rotation
+
+    In the `api` folder:
+
+    ```bash
+    node index.js rotate-encrypt-key
+    ```
+
+    It re-encrypts license keys, gift card codes, API and webhook secrets and the license signing key, then lists how many values of each it moved. If it stops halfway, run it again: values already on the new key are left alone. If it reports that nothing could be read, `ENCRYPT_KEY` isn't the key this database uses, and nothing was changed.
+  </Step>
+  <Step>
+    ### Switch to the new key
+
+    In `api/.env`, set `ENCRYPT_KEY` to the new value and remove `NEW_ENCRYPT_KEY`. Then start the API.
+  </Step>
+</Steps>
+
+<Callout type="warn" title="Keep the old key">
+  Keep the old key with your older database backups: they can only be read with it.
+</Callout>
+
+## The app's API keys
+
+The first start prints a public and a private API key, which go in `app/.env` as `PUBLIC_API_KEY` and `PRIVATE_API_KEY` (see [First start](/docs/guide/setup#first-start)). They are shown only once, so store them safely.
+
+The private key also signs each visitor's IP address when the app passes it to the API. If it is missing or wrong, the API sees every browser as the app itself, so IP limits and the IP blacklist can't tell visitors apart. See [Reverse proxy](/docs/guide/operations#reverse-proxy).
+
+## Admin roles and permissions
+
+Every account is a **Customer**, an **Admin** or the **Owner**.
+
+- There is one owner: the account created on first start. It can't be changed from the dashboard, and ownership can't be transferred.
+- The owner promotes a customer with **Make admin** on the user's page in **Dashboard → Users**, and demotes them with **Remove admin**. The user is emailed either way.
+- Only the owner sees **Store settings**, **Webhooks** and **Developers**.
+
+A new admin can manage every area. On an admin's page, the owner can limit them to some areas:
+
+| Area | Lets the admin |
+| --- | --- |
+| **Products** | Create, edit and archive products; moderate reviews. |
+| **Licenses** | Generate, grant, revoke and delete licenses. |
+| **Files** | Upload, edit and delete downloads. |
+| **Orders** | See orders, subscriptions and analytics, retry fulfillment and revoke access. |
+| **Marketing** | Manage discount codes, creators and payouts, gift cards and resellers. |
+| **Support** | Read and answer customer tickets. |
+| **Users** | Manage customer accounts, bans, device and IP bindings, and store credit. |
+| **Security** | Block IP addresses and devices. |
+| **Logs and activity** | See request logs and the activity log. |
+
+The dashboard only shows an admin the pages of their areas.
+
+Admins can't benefit from their own actions: they can't give themselves store credit, record a creator payout to themselves, make themselves a creator or a reseller, or redeem a gift card they issued. The attempt is refused and recorded in the activity log. The owner can.
+
+## API keys for your integrations
+
+Give your own servers and bots (a game server that grants licenses, a support bot that looks up orders) access to the admin API without a password. Open **Dashboard → Developers** (owner only) and click **Create key**:
+
+| Field | What it does |
+| --- | --- |
+| **Name** | So you know which system uses it, e.g. "Discord bot". |
+| **Areas it can use** | One or more of the areas above. |
+| **Expires** | Never, or after 30, 90 or 365 days. |
+
+The key (`mbk_…`) is shown **only once**. Keep it on your server, never in a website or a loader.
+
+- A key acts as the owner who created it, limited to the areas you chose.
+- It can never reach owner-only settings, customer pages or other API keys.
+- Reaching products and releases needs the **Products** area; store statistics need **Orders**.
+- Its actions appear in the activity log as "API key: *name*".
+- **Revoke** stops it at once. You can have up to 50 active keys.
+
+The page also links the OpenAPI description of every endpoint a key can call. See the [admin API](/docs/api/admin-api) for how to use the keys.
+
+Resellers have their own keys (`mbr_…`) that only work on the reseller API. See [Resellers](/docs/guide/features/resellers).
+
+## Signed license tokens
+
+Loaders built with the 2.0 SDKs get a license token signed with your store's own key, so a fake server can't pretend a customer is licensed. **Dashboard → Developers** shows the public verification key to embed in your software, and each SDK ready to paste.
+
+- **Store settings → Security → Offline window** sets how long a token stays valid, so loaders keep working without reaching the API (24 hours by default, 1 to 720).
+- The signing key is created automatically and stored in the database, encrypted with `ENCRYPT_KEY`. If you lose the database or `ENCRYPT_KEY`, loaders that embed its public key must be rebuilt.
+
+See the [client API](/docs/api/client-api) and the [SDKs](/docs/api/sdks).
+
+## IP and device limits
+
+**Store settings → Security** sets how many networks and devices one account may use your products from:
+
+| Setting | Default | Range |
+| --- | --- | --- |
+| **IP addresses per user** | 3 | 1–100 |
+| **Devices per user** | 2 | 1–100 |
+| **Self-service reset cooldown** | 24 hours | 0–8760 (0 allows unlimited resets) |
+
+Products can allow more devices, or count them separately; see [Products](/docs/guide/features/products#devices). Customers reset their bindings themselves from **Account** (see [Customer dashboard](/docs/guide/features/customer-dashboard)); admins with the **Users** area can reset them at any time from the user's page.
+
+## Blocking addresses and devices
+
+**Dashboard → Security** (Security area) blocks exact IP addresses (IPv4 or IPv6) and device IDs (HWIDs). Blocked entries can't sign in or use the API. Use **Block address or device** to add one and **Unblock** to remove it.
+
+## Rate limits
+
+Moonbase limits repeated attempts per IP address (and per account where it matters). Limits reset by themselves; the error is `TOO_MANY_ATTEMPTS` (`TOO_MANY_REQUESTS` for the general limit).
+
+| What | Limit |
+| --- | --- |
+| Any API request | 300 per 15 minutes per IP |
+| Failed sign-ins and password checks | 20 per 15 minutes per IP |
+| Failed sign-ins to one account | 20 per 15 minutes per account |
+| Wrong license keys | 20 per 15 minutes per IP, and 20 per hour per account |
+| Wrong discount or gift card codes | 20 per 15 minutes per IP |
+| Password reset emails | 10 per 15 minutes per IP, and 3 per hour per email address |
+| Adding teammates | 20 per hour per account |
+| Guest checkouts | 10 per 15 minutes per IP |
+| Device and IP resets | 5 per 15 minutes per IP |
+
+Because failed sign-ins are also counted per account, nobody can guess a password faster by changing IP addresses.
+
+## Passwords and accounts
+
+- Passwords need 12 to 128 characters with upper and lower case letters, a digit and a symbol, and can't contain the username or the email name.
+- New passwords are checked against known data breaches (Have I Been Pwned). If that service can't be reached, the password is accepted with a warning in the API log; set `PASSWORD_BREACH_CHECK_STRICT=true` to refuse it instead.
+- With email configured, new accounts confirm their email before they are created (the link lasts 24 hours), and customers can reset a forgotten password by email (the link lasts 1 hour).
+- Changing or resetting a password signs the account out everywhere.
+
+## Activity log
+
+**Dashboard → Activity** (Logs and activity area) records who changed what: products, licenses, files, users, roles and permissions, bans, store settings, orders, discount codes, gift cards, credit, resellers, payouts, reviews, webhooks and API keys. Each entry says whether it came from the dashboard, a Discord command, an API key or the system (for example a payment webhook). Filter it by type. Activity entries are kept forever.
+
+## Request logs
+
+**Dashboard → Request logs** (Logs and activity area) shows requests from loaders using the original `/api` routes (sign-in, binding resets, license activation) and from plugins that log their own: method, path, status, IP address, location and user agent, with an error rate and a map of request origins. Use **Block this IP** from a request's details to add it to the blacklist (needs the Security area).
+
+Logs contain IP addresses, so they are deleted after **Store settings → Security → Keep request logs for** (90 days by default; 0 keeps them forever). The cleanup runs daily at 03:00 UTC.
