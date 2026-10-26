@@ -1,46 +1,93 @@
 ---
 title: Examples
-description: Example plugins for frontend and backend.
+description: Example plugins for frontend and backend, written for Moonbase 2.0.
 ---
 
 <Tabs items={['Frontend examples', 'Backend examples']} defaultIndex={0}>
   <Tab>
     <Accordions type="single" collapsible>
-      <Accordion title="Add a checkout helper modal">
+      <Accordion title="Checkout helper modal with a guard">
         ```tsx
+        'use client';
+
+        import { useEffect, useState } from 'react';
         import type { FrontendPlugin, PluginSlotProps } from '@/lib/plugins/types';
 
+        let confirm: ((ok: boolean) => void) | null = null;
+
         const HelperModal = ({ ctx }: PluginSlotProps) => {
-          return <div className="fixed inset-0">Helper UI</div>;
+          const [open, setOpen] = useState(false);
+
+          useEffect(() => ctx.events.on('checkout-helper:open', () => setOpen(true)), [ctx]);
+
+          if (!open) return null;
+          const close = (ok: boolean) => {
+            setOpen(false);
+            confirm?.(ok);
+            confirm = null;
+          };
+          return (
+            <div className="fixed inset-0 z-50 grid place-items-center bg-black/50">
+              <div className="space-y-3 rounded-lg bg-background p-6">
+                <p>Accept the plugin terms to continue.</p>
+                <button onClick={() => close(true)}>Accept</button>
+                <button onClick={() => close(false)}>Cancel</button>
+              </div>
+            </div>
+          );
         };
 
         const plugin: FrontendPlugin = {
           name: 'checkout-helper',
           slots: { global: HelperModal },
-          bootstrap: (ctx) => {
-            return ctx.checkout.registerGuard(async () => {
-              return true;
-            });
-          }
+          bootstrap: (ctx) =>
+            ctx.checkout.registerGuard(
+              () =>
+                new Promise<boolean>((resolve) => {
+                  confirm = resolve;
+                  ctx.events.emit('checkout-helper:open');
+                })
+            )
         };
 
         export default plugin;
         ```
 
-        Remember to add the plugin to `app/plugins/registry.ts` so the frontend runtime loads it.
+        Add the plugin to `app/plugins/registry.ts` so the frontend runtime loads it. The guard is a convenience only: enforce terms in the backend if they matter.
       </Accordion>
-      <Accordion title="Mount into an existing element">
+      <Accordion title="Dashboard page with a sidebar link">
         ```tsx
+        'use client';
+
+        import Link from 'next/link';
+        import { PageBody, PageHeader } from '@/components/app/page-header';
+        import type { FrontendPlugin } from '@/lib/plugins/types';
+
         const plugin: FrontendPlugin = {
-          name: 'summary-note',
-          mounts: [
+          name: 'notes',
+          slots: {
+            'dashboard.nav': () => (
+              <Link href="/dashboard/notes" className="flex h-8 items-center rounded-md px-2.5 text-[13.5px] text-sidebar-foreground hover:bg-sidebar-accent/60">
+                Notes
+              </Link>
+            )
+          },
+          pages: [
             {
-              selector: '[data-checkout-summary]',
-              component: () => <div className="text-xs text-muted-foreground">Note from plugin</div>
+              path: '/dashboard/notes',
+              component: () => (
+                <PageBody>
+                  <PageHeader title="Notes" description="A page served by a plugin." />
+                </PageBody>
+              )
             }
           ]
         };
+
+        export default plugin;
         ```
+
+        See [Dashboard Pages](/docs/plugin/frontend/pages) for path rules and access.
       </Accordion>
     </Accordions>
   </Tab>
@@ -51,9 +98,77 @@ description: Example plugins for frontend and backend.
         module.exports = {
           name: 'audit-log',
           register(ctx) {
-            ctx.routers.api.post('/plugins/audit', (req, res) => {
-              ctx.logger.info('audit event', req.body);
+            const { apiAuth, limiter } = ctx.core.helpers;
+
+            // POST /api/plugins/audit: body already parsed on ctx.routers.api
+            ctx.routers.api.post('/plugins/audit', limiter, apiAuth.public, (req, res) => {
+              const event = String(req.body?.event ?? '').slice(0, 100);
+              ctx.logger.info('audit event', { user: String(req.user._id), event });
               res.json({ status_overview: 'success' });
+            });
+          }
+        };
+        ```
+      </Accordion>
+      <Accordion title="Admin route limited to an area">
+        ```js
+        module.exports = {
+          name: 'license-report',
+          register(ctx) {
+            const { apiAuth, limiter } = ctx.core.helpers;
+            const { License } = ctx.core.models;
+
+            // GET /api/plugins/license-report: admins with the licenses area, and the owner
+            ctx.routers.api.get('/plugins/license-report', limiter, apiAuth.permission('licenses'), async (_req, res) => {
+              const active = await License.countDocuments({ activated: true });
+              res.json({ status_overview: 'success', status_data: { active } });
+            });
+          }
+        };
+        ```
+
+        Call it from a frontend plugin with `ctx.api.request(path, { headers: { 'x-use-private': 'true' } })`.
+      </Accordion>
+      <Accordion title="Serve files from a folder (Express 5 wildcard)">
+        ```js
+        const path = require('path');
+
+        module.exports = {
+          name: 'plugin-assets',
+          register(ctx) {
+            const root = path.join(ctx.paths.pluginsDir, 'assets');
+
+            // Express 5: the wildcard needs a name; its value is an array of segments.
+            ctx.app.get('/api/plugin/assets/*file', (req, res) => {
+              res.sendFile(req.params.file.join('/'), { root, dotfiles: 'deny' }, (error) => {
+                if (error && !res.headersSent) res.status(404).json({ status_message: 'NOT_FOUND', status_overview: 'failed', status_code: 404 });
+              });
+            });
+          }
+        };
+        ```
+      </Accordion>
+      <Accordion title="Store plugin data in MongoDB">
+        ```js
+        module.exports = {
+          name: 'notes-store',
+          register(ctx) {
+            // The API's own Mongoose instance, already connected.
+            const mongoose = ctx.core.models.User.base;
+            const noteSchema = new mongoose.Schema(
+              { user: { type: String, index: true }, text: { type: String, maxlength: 500 } },
+              { timestamps: true }
+            );
+            // Mongoose 9: pre hooks get no next(); use async functions and throw to abort.
+            noteSchema.pre('save', async function () {
+              this.text = this.text.trim();
+            });
+            const Note = mongoose.models.plugin_note ?? mongoose.model('plugin_note', noteSchema);
+
+            const { apiAuth } = ctx.core.helpers;
+            ctx.routers.api.post('/plugins/notes', apiAuth.public, async (req, res) => {
+              const note = await Note.create({ user: String(req.user._id), text: String(req.body?.text ?? '') });
+              res.json({ status_overview: 'success', status_data: { id: String(note._id) } });
             });
           }
         };
@@ -65,10 +180,14 @@ description: Example plugins for frontend and backend.
           name: 'purchase-sync',
           register(ctx) {
             ctx.hooks.onPurchaseFulfilled(async (payload) => {
+              const order = await ctx.core.models.Purchase.findOne({ payment_id: payload.eventId }).lean();
+              if (order?.wholesale) return;
+
               for (const item of payload.items) {
                 ctx.logger.info('syncing fulfilled item', {
                   eventId: payload.eventId,
                   provider: payload.provider,
+                  renewal: Boolean(order?.renewal),
                   user: payload.user.email,
                   product: item.product.slug,
                   plan: item.plan
@@ -79,7 +198,7 @@ description: Example plugins for frontend and backend.
         };
         ```
 
-        Use this hook for provisioning and post-purchase sync work. It runs after Moonbase has already granted access.
+        Use this hook for provisioning and post-purchase sync work. It runs after Moonbase has granted access, once per order. See [Backend Hooks](/docs/plugin/backend/hooks) for timing and renewals.
       </Accordion>
     </Accordions>
   </Tab>

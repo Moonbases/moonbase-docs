@@ -1,50 +1,61 @@
 ---
 title: Moonbase Plugin System
-description: Extend the backend and frontend without touching core code.
+description: Extend the API, storefront and dashboard without touching core code.
 ---
 
 import { Eye, Link2 } from 'lucide-react';
 
-Moonbase ships with two plugin runtimes: a backend loader for the API and a frontend runtime for the Next.js app. Backend plugins are loaded from disk at runtime; frontend plugins are compiled into the app and registered explicitly.
+Moonbase ships with two plugin runtimes: a backend loader for the API and a frontend runtime for the Next.js storefront and dashboard. Backend plugins are JavaScript files the API loads from disk at startup. Frontend plugins are compiled into the app and registered explicitly.
+
+<Callout type="warn" title="Upgrading from 1.8?">
+  Moonbase 2.0 runs on Express 5 and Mongoose 9 and has a redesigned UI. Plugins written for 1.8 need checking before you enable them again: follow [Migrating plugins from 1.8](/docs/plugin/migrating).
+</Callout>
 
 ## <Eye className="inline size-4" /> At a glance
 <Cards>
   <Card
     title="Backend plugins"
     href="/docs/plugin/backend/overview"
-    description="Drop a file in `api/plugins` and restart the API."
+    description="Drop a file in `api/plugins` (or the folder in `PLUGINS_DIR`) and restart the API."
   />
   <Card
     title="Frontend plugins"
     href="/docs/plugin/frontend/overview"
-    description="Add a plugin under `app/plugins` and register it in `app/plugins/registry.ts`."
+    description="Add a plugin under `app/plugins`, register it in `app/plugins/registry.ts` and rebuild the app."
   />
 </Cards>
+
+<Callout type="info" title="Paths in these docs">
+  Paths follow the release package (`api/…`, `app/…`). In a source checkout, the same folders are under `apps/` (`apps/api/plugins`, `apps/app/plugins`).
+</Callout>
 
 ## Two runtimes
 <Tabs items={['Backend runtime', 'Frontend runtime']} defaultIndex={0}>
   <Tab>
-    - Backend plugins run inside the API and can register routes, patch services, or listen to purchase flows.
+    - Backend plugins run inside the API. They can add routes, guard or extend the checkout API, use the Mongoose models, patch payment services, and react to fulfilled purchases.
   </Tab>
   <Tab>
-    - Frontend plugins run inside the app and can render UI, open modals, and block checkout via guards.
+    - Frontend plugins run in the browser. They can render UI in slots (everywhere, or in the dashboard sidebar), add dashboard pages, call the API through the app's proxy, and stop a checkout with guards.
   </Tab>
 </Tabs>
 
 <Callout type="info" title="Pick the right runtime">
-  Choose the backend for data and workflows, and the frontend for UI and flow control.
+  Choose the backend for data, rules and workflows, and the frontend for UI and flow. Anything that must be enforced belongs in the backend.
 </Callout>
 
 ## What a plugin can do
 <Cards>
-  <Card title="Extend the API" description="Add endpoints, middleware, or background logic." />
-  <Card title="Inject UI" description="Render UI in slots or portals without editing core pages." />
-  <Card title="Guard checkout" description="Validate prerequisites before payment starts." />
+  <Card title="Extend the API" href="/docs/plugin/backend/routes" description="Add endpoints with the API's own auth guards and admin areas." />
+  <Card title="Act on purchases" href="/docs/plugin/backend/hooks" description="Provision or sync after Moonbase grants access, for every payment provider." />
+  <Card title="Inject UI" href="/docs/plugin/frontend/slots-and-portals" description="Render UI in the global or dashboard.nav slots without editing core pages." />
+  <Card title="Add dashboard pages" href="/docs/plugin/frontend/pages" description="Serve full pages under /dashboard/... inside the dashboard shell." />
+  <Card title="Guard checkout" href="/docs/plugin/frontend/checkout-guards" description="Check prerequisites before payment starts." />
 </Cards>
 
 ## <Link2 className="inline size-4" /> Quick links
 <Cards>
   <Card title="Getting started" href="/docs/plugin/getting-started" />
+  <Card title="Migrating from 1.8" href="/docs/plugin/migrating" />
   <Card title="Frontend runtime overview" href="/docs/plugin/frontend/overview" />
   <Card title="Backend runtime overview" href="/docs/plugin/backend/overview" />
   <Card title="Examples" href="/docs/plugin/examples" />

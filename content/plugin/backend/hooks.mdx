@@ -3,67 +3,92 @@ title: Backend Hooks
 description: Run logic when routes are ready, when purchases are fulfilled, or on shutdown.
 ---
 
-The backend loader exposes three hook points:
+The backend loader exposes three hooks on `ctx.hooks`. Register them inside `register(ctx)`; each accepts sync or `async` callbacks.
 
 <TypeTable
   type={{
     'hooks.onRoutesReady(callback)': {
-      type: '(callback) => void',
-      description: 'Runs after routes are registered.',
+      type: '(callback: () => void | Promise<void>) => void',
+      description:
+        'Runs once at startup, after every plugin has loaded and the core routes are mounted, before the not-found handler. Callbacks run in registration order and are awaited. A callback that throws stops the API from starting.',
       required: true
     },
     'hooks.onPurchaseFulfilled(callback)': {
-      type: '(callback) => void',
+      type: '(callback: (payload) => void | Promise<void>) => void',
       description:
-        'Runs after Moonbase finishes fulfilling a successful checkout, including free checkouts.',
+        'Runs once per fulfilled order (paid, free, store credit, renewal), after Moonbase has granted access. Errors are logged and never affect the order.',
       required: true
     },
     'hooks.onShutdown(callback)': {
-      type: '(callback) => void',
-      description: 'Runs when the API is shutting down.',
+      type: '(callback: () => void | Promise<void>) => void',
+      description:
+        'Runs on SIGINT or SIGTERM (and after an uncaught exception), once the HTTP server has stopped accepting requests. Errors are ignored. The API exits after 20 seconds at most, so keep cleanup short.',
       required: true
     }
   }}
 />
 
-<Callout type="info" title="When to use hooks">
-  Use `onPurchaseFulfilled` for post-purchase integrations like provisioning, syncing licenses, or notifying third-party services. Prefer it over wrapping payment-provider webhooks when you only need logic after Moonbase has already granted access.
+<Callout type="info" title="When to use onPurchaseFulfilled">
+  Use it for post-purchase work such as provisioning, syncing licenses or notifying third-party services. It runs only after Moonbase has granted access, for every payment provider, so you don't need to touch payment webhooks.
 </Callout>
 
-## Purchase fulfilled payload
+## When `onPurchaseFulfilled` runs
 
-The `onPurchaseFulfilled` callback receives a single `payload` object:
+Moonbase fulfills an order when the payment provider confirms it (webhook or PayPal return page), immediately for free orders and orders paid entirely with store credit, for each paid subscription renewal, and when an admin retries a failed order. For each order:
+
+<Steps>
+  <Step>Moonbase creates the licenses (or gift card codes), rebuilds the customer's product access, and marks the purchase `completed`.</Step>
+  <Step>It queues the emails with the new license keys or gift card codes.</Step>
+  <Step>**Your callbacks run**, one after another, each awaited.</Step>
+  <Step>It finishes the order: invoice number, refunds reported early, creator commission, checkout-reminder attribution, then the receipt email, a guest buyer's password link and the `order.completed` webhook.</Step>
+</Steps>
+
+- **Once per order.** Fulfillment is keyed by `eventId`. Repeated webhook deliveries and retries of a completed order don't call the hook again. If your callback fails, Moonbase doesn't retry it: record the work you still owe and catch up yourself.
+- **Not called** when a refund or dispute was recorded before the payment was confirmed, or when fulfillment fails (the hook runs on the successful retry instead).
+- **In the request.** The callback runs inside the provider's webhook request, the customer's PayPal return page or the free checkout request, and delays the rest of the order. Keep it fast, or start long work without awaiting it:
+
+```js
+ctx.hooks.onPurchaseFulfilled((payload) => {
+  // Not awaited: the order finishes immediately.
+  void provision(payload).catch((error) => ctx.logger.error('provisioning failed', error));
+});
+```
+
+## Purchase fulfilled payload
 
 <TypeTable
   type={{
     eventId: {
       type: 'string',
-      description: 'Unique identifier for the fulfillment event.',
+      description:
+        'Unique ID of the order, also stored as Purchase.payment_id: a Stripe Checkout Session ID, a Stripe invoice ID for renewals and plan changes, a Coinbase charge ID, a PayPal order ID, or a Moonbase ID for free (free:...) and store-credit (credit_...) orders.',
       required: true
     },
     provider: {
-      type: "'free' | 'stripe' | 'coinbase' | 'paypal' | string",
-      description: 'Payment provider used for the checkout.',
+      type: "'stripe' | 'paypal' | 'coinbase' | 'free' | 'credit'",
+      description: 'How the order was paid. credit means store credit covered all of it.',
       required: true
     },
     currency: {
       type: 'string',
-      description: 'Order currency, usually `USD` in the current checkout flow.',
+      description:
+        'Currency as the provider reported it, for example usd (Stripe, lowercase) or USD. Uppercase it before comparing.',
       required: true
     },
     userId: {
       type: 'string',
-      description: 'Moonbase user id for the customer.',
+      description: 'Moonbase user ID of the buyer.',
       required: true
     },
     user: {
-      type: 'object',
-      description: 'Moonbase user document loaded during fulfillment.',
+      type: 'User document',
+      description:
+        'The buyer account (Mongoose document) after access was granted. It includes security fields: never send it to a third party as is.',
       required: true
     },
     items: {
       type: 'Array<{ productId, product, plan, quantity }>',
-      description: 'Products that were fulfilled in the order.',
+      description: 'The order lines, as sold. Never empty.',
       required: true
     }
   }}
@@ -75,26 +100,54 @@ Each item in `payload.items` includes:
   type={{
     productId: {
       type: 'string',
-      description: 'Product id stored in Moonbase.',
+      description: 'Product ID.',
       required: true
     },
     product: {
-      type: 'object',
-      description: 'Product document, including fields like `name`, `slug`, and pricing.',
+      type: 'Product document',
+      description:
+        'The product sold on this line, with fields such as name and slug. For a bundle this is the bundle itself (its contents are in bundle_products); a gift card product has gift_card set to true.',
       required: true
     },
     plan: {
-      type: 'string',
-      description: 'Purchased access plan such as `lifetime`, `monthly`, or `yearly`.',
+      type: "'lifetime' | 'monthly' | 'yearly' | 'daily'",
+      description: 'Purchased plan.',
       required: true
     },
     quantity: {
       type: 'number',
-      description: 'Quantity fulfilled for that product entry.',
+      description: 'Units (or seats, for products sold per seat) on this line.',
       required: true
     }
   }}
 />
+
+### Renewals, wholesale and other order types
+
+The payload is the same for every kind of order. When the difference matters, read the stored purchase:
+
+```js
+ctx.hooks.onPurchaseFulfilled(async (payload) => {
+  const order = await ctx.core.models.Purchase.findOne({ payment_id: payload.eventId }).lean();
+
+  if (order?.wholesale) return; // a reseller bought keys: nobody has access yet
+  if (order?.renewal) {
+    // an automatic subscription renewal (order.subscription_id): extend, don't provision again
+  }
+  // order.total_amount, order.coupon_code, order.items[].price ...
+});
+```
+
+- **Renewals and plan changes** of subscriptions fire the hook again with a new `eventId` (the Stripe invoice). The stored purchase has `renewal: true` and `subscription_id`.
+- **Wholesale orders** fire the hook with the reseller as the buyer. Their licenses are unredeemed and grant the reseller nothing; access follows whoever redeems a key.
+- **Bundles** arrive as one line for the bundle product. Moonbase grants each product in `product.bundle_products` with the line's plan and quantity.
+- **Gift cards** arrive as lines whose `product.gift_card` is `true`. They grant store credit codes, not licenses.
+
+<Callout type="warn" title="Refunds don't call a hook">
+  There is no plugin hook for refunds, disputes or revoked orders. When those remove access, Moonbase updates the purchase (`payment_status` becomes `refunded` or `disputed`). To react to them from outside, subscribe to the `order.refunded` and `order.disputed` events in **Dashboard → Webhooks**.
+</Callout>
+
+## Example
 
 ```js
 module.exports = {
@@ -109,6 +162,7 @@ module.exports = {
         ctx.logger.info('fulfilled purchase item', {
           eventId: payload.eventId,
           provider: payload.provider,
+          currency: payload.currency.toUpperCase(),
           userId: payload.userId,
           product: item.product.slug,
           plan: item.plan,

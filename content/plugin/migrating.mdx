@@ -1,0 +1,312 @@
+---
+title: Migrating plugins from 1.8
+description: What changed for backend and frontend plugins in Moonbase 2.0, with before/after code and a checklist.
+---
+
+import { ListChecks, Server, MonitorSmartphone, ShieldCheck } from 'lucide-react';
+
+Moonbase 2.0 keeps the plugin APIs: the backend plugin file format, `ctx` (`app`, `routers`, `core`, `services`, `modules`, `hooks`) and the frontend plugin shape (`slots`, `mounts`, `pages`, `bootstrap`, `ctx.api`) are the same. What changed underneath them is Express 4 → 5, Mongoose 8 → 9, a redesigned storefront and dashboard, and stricter security checks that plugin routes go through as well.
+
+<Callout type="warn" title="Keep custom plugins disabled during the upgrade">
+  Back up `api/plugins` and `app/plugins` with the rest of the store (see [Upgrading](/docs/guide/upgrading)). Set `enabled: false` on custom plugins, upgrade, then enable and test them one at a time. A route path in the old syntax makes the plugin fail to load, and a thrown error in `onRoutesReady` stops the API from starting.
+</Callout>
+
+## <Server className="inline size-4" /> Backend plugins
+
+### Express 5 routes
+
+Express 5 uses a new path syntax. Paths in the old syntax throw when the route is registered (`Unexpected ? at index …`, `Missing parameter name at index …`), and the API logs `Failed to load plugin`.
+
+<Tabs items={['Wildcards', 'Optional parts', 'Regular expressions']} defaultIndex={0}>
+  <Tab>
+    Wildcards need a name, and their value is an array of path segments.
+
+    ```js
+    // 1.8
+    ctx.app.get('/api/plugin/files/*', (req, res) => {
+      const file = req.params[0]; // 'docs/readme.txt'
+    });
+
+    // 2.0
+    ctx.app.get('/api/plugin/files/*file', (req, res) => {
+      const file = req.params.file.join('/'); // ['docs', 'readme.txt']
+    });
+    ```
+
+    `*file` needs at least one segment. To also match `/api/plugin/files` itself, write `/api/plugin/files{/*file}`; `req.params.file` is then `undefined` for the bare path.
+  </Tab>
+  <Tab>
+    `?` is gone. Wrap the optional part, including its separator, in braces.
+
+    ```js
+    // 1.8
+    ctx.app.get('/api/plugin/user/:id?', handler);
+    ctx.app.get('/api/plugin/download/:name.:ext?', handler);
+
+    // 2.0
+    ctx.app.get('/api/plugin/user{/:id}', handler);
+    ctx.app.get('/api/plugin/download/:name{.:ext}', handler);
+    ```
+  </Tab>
+  <Tab>
+    Regular-expression characters (`(`, `)`, `+`, `?`, `[`, `]`) aren't allowed in path strings. Use several paths, or validate the parameter in the handler.
+
+    ```js
+    // 1.8
+    ctx.app.get('/api/plugin/v(1|2)/status', handler);
+    ctx.app.get('/api/plugin/item/:id(\\d+)', handler);
+
+    // 2.0
+    ctx.app.get(['/api/plugin/v1/status', '/api/plugin/v2/status'], handler);
+    ctx.app.get('/api/plugin/item/:id', (req, res, next) => {
+      if (!/^\d+$/.test(req.params.id)) return next(); // falls through to a 404
+      // ...
+    });
+    ```
+  </Tab>
+</Tabs>
+
+### Requests and responses
+
+<Tabs items={['req.body', 'req.query', 'Removed methods', 'Errors']} defaultIndex={0}>
+  <Tab>
+    `req.body` is `undefined` (not `{}`) when no parser ran, or when the request has no body of the parser's type. As in 1.8, `express.json()` isn't active yet when plugins load, so routes on `ctx.app` parse their own bodies.
+
+    ```js
+    // 1.8: crashes on Express 5 when the body is missing
+    ctx.app.post('/api/plugin/check', express.json(), (req, res) => {
+      const { domain } = req.body;
+    });
+
+    // 2.0
+    ctx.app.post('/api/plugin/check', express.json(), (req, res) => {
+      const { domain } = req.body ?? {};
+    });
+    ```
+
+    Routes on `ctx.routers.api` (and the other v1 routers) get parsed bodies and need no parser. If your plugin `require`s `express` only for `express.json()`, moving the route there removes that dependency.
+  </Tab>
+  <Tab>
+    `req.query` is a read-only getter, and nested keys aren't expanded any more (`?filter[name]=x` gives `{ 'filter[name]': 'x' }`).
+
+    ```js
+    // 1.8
+    req.query.page = req.query.page || '1';
+    const name = req.query.filter.name;
+
+    // 2.0
+    const page = Number(req.query.page ?? 1);
+    const name = req.query['filter[name]'];
+    ```
+  </Tab>
+  <Tab>
+    | 1.8 (Express 4) | 2.0 (Express 5) |
+    | --- | --- |
+    | `app.del(path, …)` | `app.delete(path, …)` |
+    | `req.param('id')` | `req.params.id`, `req.query.id` or `req.body?.id` |
+    | `res.sendfile(file)` | `res.sendFile(file, { root })` |
+    | `res.json(body, 201)` | `res.status(201).json(body)` |
+    | `res.send(404)` | `res.sendStatus(404)` |
+    | `res.redirect('back')` | `res.redirect(req.get('Referer') ?? '/')` |
+
+    See the [Express 5 migration guide](https://expressjs.com/en/guide/migrating-5.html) for the full list.
+  </Tab>
+  <Tab>
+    Errors thrown in `async` handlers now reach the API's error handler instead of leaving the request hanging. Unknown errors answer `500 SERVER_ERROR` in the v1 envelope, and unmatched paths answer `404 NOT_FOUND` (1.8 had neither handler). You can drop `try`/`catch` blocks that only existed to avoid hanging requests.
+  </Tab>
+</Tabs>
+
+### Mongoose 9
+
+`pre` middleware no longer receives `next`. Calling it throws `next is not a function`.
+
+```js
+// 1.8
+schema.pre('save', function (next) {
+  if (!this.name) return next(new Error('name required'));
+  this.slug = this.name.toLowerCase();
+  next();
+});
+
+// 2.0
+schema.pre('save', async function () {
+  if (!this.name) throw new Error('name required');
+  this.slug = this.name.toLowerCase();
+});
+```
+
+Check your schemas, middleware and queries against [Mongoose's migration guide to 9](https://mongoosejs.com/docs/migrating_to_9.html). Define plugin models on the API's own Mongoose instance, `ctx.core.models.User.base`. A separately required `mongoose` isn't connected (see [Dependencies](/docs/plugin/backend/overview#dependencies)).
+
+```js
+// 1.8
+const mongoose = require('mongoose');
+const Role = mongoose.model('role', roleSchema);
+
+// 2.0
+const mongoose = ctx.core.models.User.base;
+const Role = mongoose.models.role ?? mongoose.model('role', roleSchema);
+```
+
+### File records
+
+`ctx.core.models.File` records store only the file name in `path`. The file lives in the storage folder (`STORAGE_DIR` in `api/.env`, default `api/storage`). Records uploaded before 2.0 keep their old absolute path; only its last segment counts.
+
+```js
+// 1.8
+const stream = fs.createReadStream(file.path);
+
+// 2.0
+const path = require('path');
+const storage = path.resolve(ctx.paths.rootDir, ctx.env.STORAGE_DIR?.trim() || 'storage');
+const name = path.basename(String(file.path).replace(/\\/g, '/'));
+const stream = fs.createReadStream(path.join(storage, name));
+```
+
+## <ShieldCheck className="inline size-4" /> Security changes that affect plugins
+
+<Accordions type="multiple">
+  <Accordion title="verifyJWT checks the account">
+    `ctx.core.helpers.verifyJWT(token)` now loads the account and refuses tokens of banned accounts (`BANNED`, 403) and tokens revoked by a password change or sign-out everywhere (`TOKEN_REVOKED`, 401), like the API's own sessions. It also refuses non-session tokens such as download tickets (`INVALID_TOKEN`).
+
+    On success it returns `{ decoded }`, where `decoded` holds the session claims (`_id`, `flags`, `banned`, `token_version`, `iat`, `exp`). The 1.8 helper tried to read `decoded.user` and `decoded.dashboard`, which session tokens don't contain. Remove code that expects them, and the `DECRYPTION_ERROR` and `SERVER_ERROR` cases. It is still `async`:
+
+    ```js
+    const result = await ctx.core.helpers.verifyJWT(req.header('Token'));
+    if (!('decoded' in result)) return res.status(result.status_code).json(result);
+    const user = await ctx.core.models.User.findById(result.decoded._id).select('username flags').lean();
+    ```
+
+    If you verified tokens with `jsonwebtoken` directly, switch to `verifyJWT` or `apiAuth.public`, which apply these checks.
+  </Accordion>
+  <Accordion title="Admins can be limited to areas">
+    The owner can now limit each admin to areas (products, licenses, files, orders, marketing, support, users, security, logs). `apiAuth.private` keeps 1.x area rules on legacy admin paths (`/admin/license/…` → licenses, `/admin/orders` → orders, and so on), now also when the route is on `ctx.app` with its full `/api/...` path. Other paths only require an admin.
+
+    ```js
+    // 1.8: any admin
+    ctx.routers.api.get('/plugins/revenue', apiAuth.private, handler);
+
+    // 2.0: state the area
+    ctx.routers.api.get('/plugins/revenue', apiAuth.permission('orders'), handler);
+    ```
+
+    Manual checks like `req.user.flags > 0` still mean "any admin" and ignore areas. Use them only for data every admin may see. See [Admin areas](/docs/plugin/backend/routes#admin-areas-on-apiauthprivate).
+  </Accordion>
+  <Accordion title="Bodies with $ keys are rejected">
+    Every request body with a key starting with `$` (at any depth) is refused with `400 INVALID_REQUEST`, including bodies on plugin routes: `ctx.app` wraps each handler a plugin registers, and the v1 routers sit behind the app-wide filter. If a plugin accepted MongoDB filters from the client, replace them with explicit fields:
+
+    ```js
+    // 1.8: the client could send { "filter": { "email": { "$ne": null } } }
+    const users = await User.find(req.body.filter);
+
+    // 2.0
+    const email = String(req.body?.email ?? '');
+    const users = await User.find({ email }).select('username email').lean();
+    ```
+
+    Routers and sub-apps mounted on `ctx.app` during `register` aren't wrapped. Mount them in `onRoutesReady` or on `ctx.routers.api` so the filter covers them.
+  </Accordion>
+  <Accordion title="API keys don't reach plugin routes">
+    2.0 adds store API keys (`Bearer mbk_…`) and reseller API keys (`Bearer mbr_…`). `apiAuth.public`, `.private` and `.permission()` answer `403 API_KEY_NOT_ALLOWED` to them. Integrations that need a plugin route must sign in as a user.
+  </Accordion>
+  <Accordion title="Client IP and proxy headers">
+    The app's proxy no longer forwards client-supplied `X-Forwarded-For`, `X-Real-IP`, `Forwarded` or `X-Moonbase-*` headers. It sends the visitor's address signed with the private key, and `TRUST_PROXY_HOPS` in `api/.env` now defaults to `0`. Read the address with `ctx.core.helpers.getIP(req)` (or `req.ip`), never from `X-Forwarded-For`.
+  </Accordion>
+</Accordions>
+
+## <MonitorSmartphone className="inline size-4" /> Frontend plugins
+
+### Replace DOM mounts
+
+The storefront and dashboard were redesigned, so `mounts` selectors written for 1.8 pages no longer find their elements and render nothing, without an error. Find them with:
+
+```bash
+grep -rn "selector:" app/plugins
+```
+
+For each one, pick a replacement:
+
+| 1.8 mount target | 2.0 replacement |
+| --- | --- |
+| Dashboard sidebar or nav menu | `dashboard.nav` slot (or `[data-plugin-mount="dashboard-nav"]`) |
+| A page section for your own feature | A [dashboard page](/docs/plugin/frontend/pages) under `/dashboard/<plugin>` |
+| Floating buttons, banners, modals | `global` slot |
+| A storefront element (product card, checkout summary) | `global` slot, or a selector checked against the 2.0 markup |
+
+<Tabs items={['1.8', '2.0']} defaultIndex={1}>
+  <Tab>
+    ```tsx
+    mounts: [
+      {
+        selector: '.sidebar-links', // written for the 1.8 sidebar
+        component: RolesNavLink,
+        order: 10
+      }
+    ]
+    ```
+  </Tab>
+  <Tab>
+    ```tsx
+    slots: {
+      'dashboard.nav': RolesNavLink
+    }
+    ```
+
+    The slot renders in the desktop sidebar and the mobile menu. A mount on `[data-plugin-mount="dashboard-nav"]` reaches only the desktop sidebar. Style the link like the core ones: see [Slots and Portals](/docs/plugin/frontend/slots-and-portals).
+  </Tab>
+</Tabs>
+
+### Page layout
+
+`@/components/DashboardPageShell` still works as a compatibility wrapper (`title`, `subtitle`, `actions`; `trail` breadcrumbs are ignored). New code should use the components the core pages use:
+
+```tsx
+// 1.8
+<DashboardPageShell title="Roles" subtitle="Manage roles" trail={['Plugins', 'Roles']} actions={<NewRoleButton />}>
+  {content}
+</DashboardPageShell>
+
+// 2.0
+import { PageBody, PageHeader } from '@/components/app/page-header';
+
+<PageBody>
+  <PageHeader title="Roles" description="Manage roles" actions={<NewRoleButton />} />
+  {content}
+</PageBody>
+```
+
+Unknown `/dashboard/...` paths now show a "not found" state instead of an empty page, so check that every link points at a registered plugin page path.
+
+### Checkout guards
+
+- The guards moved with the API client: the storefront runs them in `startCheckout` and `startGuestCheckout` (`app/features/purchases/api.ts`). `app/lib/api.ts` (`createCheckoutSession`, `createCartCheckout`) no longer exists.
+- Every checkout is a cart checkout. Guards always receive `type: 'cart'` with `items`. Code that handled `type: 'product'` and `context.productId` must read `context.items` instead:
+
+```ts
+// 1.8
+if (context?.type === 'product') return check([context.productId]);
+
+// 2.0
+return check((context?.items ?? []).map((item) => item.productId));
+```
+
+- Guest checkout is new: the guard can run for a visitor with no session, so `ctx.api` sends no `Token`.
+- On the backend, the storefront no longer calls `/api/purchase/create-session`, `/create-coinbase-charge` or `/create-paypal-order`. Checks attached to those routes must move to `/cart/checkout` and `/guest/checkout`. See [Extending checkout](/docs/plugin/backend/routes#extending-checkout).
+
+### `ctx.api`
+
+`ctx.api` works as before: it calls `/api/proxy`, sends the session as `Token`, and the proxy adds the public app key. To call routes guarded by `apiAuth.private` or `apiAuth.permission(...)`, send `x-use-private: true` with `ctx.api.request(path, { headers })`. `PRIVATE_API_KEY` must be set in `app/.env`, which 2.0 requires anyway.
+
+## <ListChecks className="inline size-4" /> Checklist
+
+<Steps>
+  <Step>Back up `api/plugins` and `app/plugins`, and set `enabled: false` on custom plugins before upgrading.</Step>
+  <Step>Search backend plugins for route paths containing `*`, `?`, `(` or `+`, and rewrite them in Express 5 syntax.</Step>
+  <Step>Read `req.body` as `req.body ?? {}`, stop assigning to `req.query`, and replace `app.del`, `req.param`, `res.sendfile`, `res.json(body, status)` and `res.send(status)`.</Step>
+  <Step>Rewrite Mongoose `pre` hooks that use `next`, and define plugin models on `ctx.core.models.User.base`.</Step>
+  <Step>Resolve `File.path` against the storage folder instead of using it as a full path.</Step>
+  <Step>`await verifyJWT(...)` and drop reads of `decoded.user` and `decoded.dashboard`.</Step>
+  <Step>Choose an admin area for each admin route (`apiAuth.permission(area)`), and make sure no route takes MongoDB operators from the request.</Step>
+  <Step>Replace 1.8 `mounts` selectors with the `global` or `dashboard.nav` slots or plugin pages. Move `DashboardPageShell` pages to `PageBody`/`PageHeader` when convenient.</Step>
+  <Step>Update checkout guards to read `context.items`, and move backend checkout checks to `/cart/checkout` and `/guest/checkout`.</Step>
+  <Step>Rebuild the app, start the API, and look for `Loaded plugin` lines and errors. Enable plugins one at a time, and test a sandbox purchase if a plugin uses `onPurchaseFulfilled`.</Step>
+</Steps>

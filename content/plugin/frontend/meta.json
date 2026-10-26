@@ -3,6 +3,7 @@
   "pages": [
     "overview",
     "slots-and-portals",
+    "pages",
     "api",
     "checkout-guards"
   ]

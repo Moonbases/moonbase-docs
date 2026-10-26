@@ -1,26 +1,65 @@
 ---
 title: Troubleshooting
-description: Common issues when plugins do not appear or run.
+description: Common issues when plugins don't load, render or respond.
 ---
 
 <Callout type="info" title="Quick checks">
-  Confirm the API is running, the plugin file exists, and the plugin is registered where required.
+  Confirm the API is running, read its startup log for plugin lines, and check that frontend plugins are in the registry and the app was rebuilt.
 </Callout>
 
 <Accordions type="single" collapsible>
   <Accordion title="Plugin not loading (backend)">
-    - Ensure the file is in `api/plugins` and ends with `.js`, `.cjs`, or `.mjs`.
-    - Check API logs for "Failed to load plugin".
-    - Make sure the plugin exports `register` or is a function.
+    - Make sure the file is in the plugins folder the API uses (`api/plugins`, or `PLUGINS_DIR` if set) and ends with `.js`, `.cjs` or `.mjs`, or is a folder with `index.js`. Names starting with `_` or `.` are skipped.
+    - Look for `Failed to load plugin <file>: <message>`, `Skipping plugin <file>: no register/init export found.` or `Plugin <name> is disabled.` in the API log.
+    - `Unexpected ? at index …`, `Missing parameter name at index …` or `Unexpected ( at index …`: a route path uses Express 4 syntax. Name wildcards (`/*path`) and use braces for optional parts (`{/:id}`). See [Migrating](/docs/plugin/migrating#express-5-routes).
+    - `… is not a function` for `app.del` (at startup), or for `req.param` or `res.sendfile` (logged as an unhandled error when the route runs): Express 5 removed them. Use `delete`, `req.params`/`req.query`/`req.body`, and `sendFile`.
+    - `Cannot find module 'express'` (or another package): the package isn't installed where the plugin can find it. The release package doesn't put the API's own libraries in `api/node_modules`. See [Dependencies](/docs/plugin/backend/overview#dependencies).
+  </Accordion>
+  <Accordion title="API doesn't start after adding a plugin">
+    An `onRoutesReady` callback that throws stops the startup. Wrap risky work in `try`/`catch`, or move it out of the hook.
+  </Accordion>
+  <Accordion title="Route returns 404 or the core response">
+    - `ctx.routers.api` paths are relative to `/api`: `'/plugins/x'` answers `/api/plugins/x`. `ctx.app` needs the full path.
+    - A route on a v1 router with the same path as a core route never runs: the core route answers first. Use another path, or register on `ctx.app` during `register` to run first.
+  </Accordion>
+  <Accordion title="req.body is undefined, or TypeError reading it">
+    Routes added to `ctx.app` during `register` run before `express.json()`. Add a parser to the route, or register on `ctx.routers.api`. On Express 5 `req.body` stays `undefined` when there's no body or the `Content-Type` doesn't match: read `req.body ?? {}`.
+  </Accordion>
+  <Accordion title="400 INVALID_REQUEST on a plugin route">
+    The request body has a key starting with `$`. The API rejects those on every route to block MongoDB operator injection. Rename the field.
+  </Accordion>
+  <Accordion title="403 INSUFFICIENT_PERMISSIONS for an admin">
+    Since 2.0 the owner can limit admins to areas. `apiAuth.private` checks the area for paths like `/admin/license/…`, and `apiAuth.permission(area)` always does. Give the admin the area on their user page, or see [Admin areas](/docs/plugin/backend/routes#admin-areas-on-apiauthprivate).
+  </Accordion>
+  <Accordion title="401 AUTHENTICATION_FAILED from ctx.api">
+    The route uses `apiAuth.private` or `apiAuth.permission(...)` but the request carried the public key. Send `x-use-private: true` with `ctx.api.request(...)`. Also check that `PRIVATE_API_KEY` is set in `app/.env`.
+  </Accordion>
+  <Accordion title="Mongoose queries never finish, or time out buffering">
+    The plugin uses its own copy of Mongoose, which isn't connected. Use the API's instance: `const mongoose = ctx.core.models.User.base;`.
+  </Accordion>
+  <Accordion title="next is not a function in a schema hook">
+    Mongoose 9 calls `pre` hooks without `next`. Make the hook an `async function` and throw to abort.
+  </Accordion>
+  <Accordion title="verifyJWT always fails, or returns a Promise">
+    `verifyJWT` is `async`: `await` it. It refuses tokens of banned accounts and tokens revoked by a password change (`BANNED`, `TOKEN_REVOKED`). The result has `decoded` on success only.
   </Accordion>
   <Accordion title="Plugin not rendering (frontend)">
-    - Confirm the plugin file lives in `app/plugins` and exports a default plugin object with a `name`.
-    - Ensure the plugin is registered in `app/plugins/registry.ts`.
-    - Make sure `PluginHost` wraps the app in `app/app/layout.tsx`.
-    - If using `mounts`, verify the selector exists in the DOM.
+    - Confirm the plugin lives in `app/plugins`, default-exports an object with a `name`, and is listed in `app/plugins/registry.ts`.
+    - Rebuild the app after changes (run the installer again in the release package).
+    - Check that `enabled` isn't `false`, and that an `enabled` function doesn't depend on state that changes later: it runs once.
+    - For `mounts`, check that the selector exists on the redesigned 2.0 pages. Use the `global` or `dashboard.nav` slots where you can.
+  </Accordion>
+  <Accordion title="Plugin page shows 'not found'">
+    The page `path` must match the URL exactly (no trailing slash, same case) and start with `/dashboard/`. A core page with the same path wins.
   </Accordion>
   <Accordion title="Checkout guard not running">
-    - Use `api.createCheckoutSession` or `api.createCartCheckout`, which call guards.
-    - If you call the API directly, call `runCheckoutGuards` first.
+    - The storefront runs guards in `startCheckout` and `startGuestCheckout` (`app/features/purchases/api.ts`). Wholesale orders don't run them.
+    - If your own UI starts a checkout, call `runCheckoutGuards` from `@/lib/plugins/guards` first.
+    - Register the guard in `bootstrap` and return its cleanup.
+  </Accordion>
+  <Accordion title="onPurchaseFulfilled didn't fire">
+    - It fires once per order. Repeated webhooks and admin retries of a completed order don't fire it again.
+    - It doesn't fire when the order failed to fulfill (check **Dashboard → Orders**) or was refunded before payment was confirmed.
+    - Errors thrown by your callback are logged as `Purchase fulfillment hook failed for <eventId>` and not retried.
   </Accordion>
 </Accordions>

@@ -1,19 +1,24 @@
 ---
 title: Frontend Runtime Overview
-description: How frontend plugins are loaded and bootstrapped.
+description: How frontend plugins are registered, loaded and bootstrapped.
 ---
 
-The frontend plugin runtime lives in `app/lib/plugins` and runs in the browser. Plugin implementations live in `app/plugins` and are registered in `app/plugins/registry.ts`.
+Frontend plugins are React code compiled into the storefront and dashboard (the Next.js app). The runtime lives in `app/lib/plugins` and runs in the browser. Plugin code lives in `app/plugins` and is listed in `app/plugins/registry.ts`.
 
 <Files>
   <Folder name="app" defaultOpen>
     <Folder name="lib" defaultOpen>
-      <Folder name="plugins">
+      <Folder name="plugins" defaultOpen>
         <File name="PluginHost.tsx" />
+        <File name="runtime.tsx" />
+        <File name="guards.ts" />
+        <File name="types.ts" />
       </Folder>
     </Folder>
     <Folder name="plugins" defaultOpen>
-      <File name="my-plugin.tsx" />
+      <Folder name="my-plugin" defaultOpen>
+        <File name="index.tsx" />
+      </Folder>
       <File name="registry.ts" />
     </Folder>
   </Folder>
@@ -21,30 +26,33 @@ The frontend plugin runtime lives in `app/lib/plugins` and runs in the browser. 
 
 ## Lifecycle
 <Steps>
-  <Step>`PluginHost` in `app/lib/plugins/PluginHost.tsx` wraps the application.</Step>
-  <Step>`PluginProvider` creates the plugin context (API, storage, events, route).</Step>
-  <Step>Each plugin may run `bootstrap(ctx)` once and return a cleanup function.</Step>
-  <Step>The registry (`app/plugins/registry.ts`) exports the plugin list used by the runtime.</Step>
+  <Step>`PluginHost` (`app/lib/plugins/PluginHost.tsx`) wraps every page from the root layout `app/app/layout.tsx`. It renders the `global` slot and the `mounts` portals after the page content.</Step>
+  <Step>`PluginProvider` reads the registry once, drops plugins whose `enabled` is `false` (or returns `false`), and builds the shared `ctx` (API, storage, events, route, checkout, logger).</Step>
+  <Step>After the first render in the browser, each plugin's `bootstrap(ctx)` runs once, in registry order. A function it returns runs when the app unmounts.</Step>
+  <Step>Slots, mounts and pages render with `{ ctx, plugin }` as props.</Step>
 </Steps>
 
 ## Registration
-Add new frontend plugins to the registry so the runtime can pick them up.
+Add each plugin to the registry so the runtime can pick it up:
 
 ```ts
 // app/plugins/registry.ts
+import type { FrontendPlugin } from '@/lib/plugins/types';
 import myPlugin from './my-plugin';
 
-export const plugins = [myPlugin];
+export const plugins: FrontendPlugin[] = [myPlugin];
 ```
 
-The list order is the execution order for slots and bootstrap hooks.
+The list order is the order of slots, pages and `bootstrap` calls. Mounts are ordered by their `order` value.
 
-<Callout type="note" title="Client-side plugins">
-  Frontend plugins run in the browser. Add `use client` to plugin files that use hooks or browser APIs.
+<Callout type="info" title="Rebuild after changes">
+  Frontend plugins are part of the app build. In a source checkout `pnpm dev` picks changes up. In the release package, run the installer again (`install.bat` / `install.sh`), which rebuilds the app, then restart the app.
 </Callout>
 
 ## Plugin shape
 ```tsx
+'use client';
+
 import type { FrontendPlugin } from '@/lib/plugins/types';
 
 const plugin: FrontendPlugin = {
@@ -56,20 +64,56 @@ const plugin: FrontendPlugin = {
     return () => ctx.logger.info('plugin cleaned up');
   },
   slots: {
-    global: ({ ctx }) => <div>Global UI</div>
+    global: ({ ctx }) => <div className="fixed bottom-4 right-4">Global UI</div>,
+    'dashboard.nav': () => <a href="/dashboard/my-plugin">My plugin</a>
   },
-  mounts: [
-    {
-      selector: '[data-plugin-anchor="checkout-summary"]',
-      component: ({ ctx }) => <div>Injected UI</div>,
-      order: 10
-    }
+  pages: [
+    { path: '/dashboard/my-plugin', component: ({ ctx }) => <div>Plugin page</div> }
   ]
 };
 
 export default plugin;
 ```
 
-<Callout type="info" title="Enabling and disabling">
-  `enabled` can be a boolean or a function. When `enabled` returns false, the plugin is skipped.
+<TypeTable
+  type={{
+    name: {
+      type: 'string',
+      description: 'Unique plugin name. Also used to key the plugin elements.',
+      required: true
+    },
+    version: {
+      type: 'string',
+      description: 'Your own release label.'
+    },
+    enabled: {
+      type: 'boolean | (() => boolean)',
+      description: 'False (or a function returning false) skips the plugin. A function is evaluated once, when the app loads in the browser, not on every navigation.',
+      default: 'true'
+    },
+    slots: {
+      type: 'Record<string, Component | ReactNode>',
+      description: 'UI for named slots: global and dashboard.nav. See Slots and Portals.'
+    },
+    mounts: {
+      type: 'Array<{ selector, component, once?, order? }>',
+      description: 'Components portaled into existing DOM elements. See Slots and Portals.'
+    },
+    pages: {
+      type: 'Array<{ path, component }>',
+      description: 'Dashboard pages under /dashboard/... See Dashboard Pages.'
+    },
+    bootstrap: {
+      type: '(ctx) => void | (() => void)',
+      description: 'Runs once in the browser; may return a cleanup function. Register checkout guards here.'
+    }
+  }}
+/>
+
+<Callout type="info" title="Client-side plugins">
+  Start plugin files with `'use client'`. Next.js can also render slot and page components on the server, so read `window`, `localStorage` or `ctx.storage` in effects or event handlers, not while rendering.
+</Callout>
+
+<Callout type="warn" title="Using app components">
+  Plugins are compiled with the app, so they can import its UI components (`@/components/ui/*`) and page layout (`PageBody`, `PageHeader` from `@/components/app/page-header`). Only the plugin types and `ctx` are a stable plugin API; other app modules can change between releases.
 </Callout>

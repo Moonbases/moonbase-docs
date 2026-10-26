@@ -1,40 +1,177 @@
 ---
 title: Backend Plugin Context
-description: What the backend ctx object provides.
+description: Everything the backend ctx object gives a plugin.
 ---
 
-Every backend plugin gets a `PluginContext` object.
+`register(ctx)` receives one `PluginContext`. Every plugin gets the same object, and plugins share the live Express app, routers, models and services.
 
 ## Context map
 
-<Tabs items={['Core fields', 'Routers', 'Services', 'Modules & core']} defaultIndex={0}>
+<TypeTable
+  type={{
+    app: {
+      type: 'Express',
+      description: 'The API application. Routes added here during register run before the core routes and before any body parser. Each handler you add rejects request bodies with $-prefixed keys.',
+      required: true
+    },
+    routers: {
+      type: '{ api, dashboard, purchase }',
+      description: 'The v1 routers, mounted at /api, /api/dashboard and /api/purchase. Routes added here run after the core routes on the same router, with JSON bodies already parsed.',
+      required: true
+    },
+    hooks: {
+      type: '{ onRoutesReady, onPurchaseFulfilled, onShutdown }',
+      description: 'Lifecycle and purchase hooks. See Backend Hooks.',
+      required: true
+    },
+    core: {
+      type: '{ controllers, models, helpers, utils }',
+      description: 'Mongoose models, auth middleware and helpers from the API itself.',
+      required: true
+    },
+    services: {
+      type: '{ API, stripe, coinbaseCommerce, paypalCheckout, emailService }',
+      description: 'Data-access facade and the payment and email clients the API uses.',
+      required: true
+    },
+    modules: {
+      type: '{ purchase }',
+      description: 'The v1 purchase route module (router and webhook handlers).',
+      required: true
+    },
+    logger: {
+      type: '{ info, warn, error, success, debug }',
+      description: 'The API logger. Each method takes a message and optional extra values.',
+      required: true
+    },
+    env: {
+      type: 'NodeJS.ProcessEnv',
+      description: 'process.env, including the values from api/.env.',
+      required: true
+    },
+    paths: {
+      type: '{ rootDir: string; pluginsDir: string }',
+      description: 'The API working directory and the plugins folder in use.',
+      required: true
+    }
+  }}
+/>
+
+## Routers
+
+| Router | Mounted at | A route `'/plugins/status'` answers | Body parsed |
+| --- | --- | --- | --- |
+| `ctx.routers.api` | `/api` | `/api/plugins/status` | Yes |
+| `ctx.routers.dashboard` | `/api/dashboard` | `/api/dashboard/plugins/status` | Yes |
+| `ctx.routers.purchase` | `/api/purchase` | `/api/purchase/plugins/status` | Yes |
+| `ctx.app` (during `register`) | `/` | needs the full path, `/api/plugins/status` | No: add a parser |
+
+`ctx.routers.purchase` is the checkout API the storefront calls (`POST /api/purchase/cart/checkout`, `POST /api/purchase/guest/checkout`), so plugins can add to it or run checks before it. See [Extending checkout](/docs/plugin/backend/routes#extending-checkout).
+
+## Core
+
+<Tabs items={['models', 'helpers', 'utils', 'controllers']} defaultIndex={0}>
   <Tab>
-    - `app`: Express app instance.
-    - `env`: `process.env`.
-    - `logger`: Moonbase logger.
-    - `hooks`: backend hooks including `onRoutesReady`, `onPurchaseFulfilled`, and `onShutdown`.
-    - `paths`: `rootDir`, `pluginsDir`.
+    Mongoose 9 models: `User`, `Product`, `License`, `File`, `Purchase`, `Blacklist`, `Dashboard`, `Log`.
+
+    ```js
+    const { Product, Purchase } = ctx.core.models;
+    const product = await Product.findOne({ slug: 'my-product' }).lean();
+    ```
+
+    - `File.path` holds only the file name in 2.0. The file is in the storage folder (`STORAGE_DIR`, default `api/storage`). Records uploaded before 2.0 keep an absolute path, and only its last segment counts.
+    - `Dashboard` holds the API's app keys, encrypted. Never send it to a client.
+    - `ctx.core.models.User.base` is the API's Mongoose instance. Use it to define your own models (see [Dependencies](/docs/plugin/backend/overview#dependencies)).
   </Tab>
   <Tab>
-    - `routers.api`
-    - `routers.dashboard`
-    - `routers.purchase`
+    <TypeTable
+      type={{
+        apiAuth: {
+          type: '{ public, private, permission(area) }',
+          description: 'Route guards. public: public app key and a signed-in session. private: private app key and an admin session. permission(area): private key and an admin allowed that area. All three set req.user.'
+        },
+        verifyJWT: {
+          type: '(token: string) => Promise<{ decoded } | failure>',
+          description: 'Checks a session token without an app key. Refuses expired, revoked and banned-account tokens. Async: await it.'
+        },
+        limiter: {
+          type: 'RequestHandler',
+          description: 'Per-IP limit of 300 requests per 15 minutes, shared with the core v1 routes that use it. Answers 429 TOO_MANY_REQUESTS.'
+        },
+        getIP: {
+          type: '(req) => string',
+          description: 'The visitor IP the API trusts (signed by the app or set by TRUST_PROXY_HOPS). Never read X-Forwarded-For yourself.'
+        },
+        requestLogger: {
+          type: 'RequestHandler',
+          description: 'Records the request in the request logs (Dashboard → Request logs) when the response finishes.'
+        },
+        errorHandler: {
+          type: '(res, err) => void',
+          description: 'Logs err and answers 500 SERVER_ERROR in the v1 envelope.'
+        },
+        findLicense: {
+          type: '(key: string) => Promise<ObjectId | null>',
+          description: 'The _id of the license with this key, or null.'
+        },
+        PKV: {
+          type: 'class',
+          description: 'License key format helpers (PKV.verify checks a key).'
+        },
+        crypto: {
+          type: '{ encrypt, decrypt, ... }',
+          description: 'Encrypts and decrypts with the API ENCRYPT_KEY, as license keys and secrets are stored.'
+        },
+        timeout: {
+          type: '(ms: number) => Promise<void>',
+          description: 'Resolves after ms milliseconds.'
+        }
+      }}
+    />
   </Tab>
   <Tab>
-    - `services.API` (database access)
-    - `services.stripe`
-    - `services.coinbaseCommerce`
-    - `services.paypalCheckout`
-    - `services.emailService`
+    - `productExpirationUtils`: license expiry calculations used by the v1 API.
+    - `contactUser`: `activateLicense` and `revokeLicense` helpers.
+    - `settingsLoader`: the 1.x settings accessors (`getSettings`, `getSecuritySettings`, `getUploadSettings`, `getEmailSettings`), kept for older plugins. Store settings are now edited in **Dashboard → Store settings**.
   </Tab>
   <Tab>
-    - `modules.purchase` (route module; can still be wrapped or patched)
-    - `core.controllers`, `core.models`, `core.helpers`, `core.utils`
+    The v1 request handlers: `controllers.v1.product`, `license`, `user`, `blacklist`, `file`, `log`, `version`, and `controllers.dashboard`. Use them to reuse a core endpoint's behaviour on a plugin route, behind the same guards the core route uses.
   </Tab>
 </Tabs>
 
-<Callout type="info" title="Preferred purchase integration point">
-  If your plugin only needs to run after a checkout is fulfilled, use `ctx.hooks.onPurchaseFulfilled(...)`. Reach for `ctx.modules.purchase` only when you truly need to wrap provider-specific behavior.
+## Services
+
+<TypeTable
+  type={{
+    API: {
+      type: 'class',
+      description: 'Data-access facade: API.user(), product(), license(), file(), log(), blacklist(), dashboard() and emailVerification() each return findOne, find, findById, count, create, update, delete, findByIdAndUpdate and findByIdAndDelete.'
+    },
+    stripe: {
+      type: 'Stripe',
+      description: 'The Stripe client the API uses for checkouts and subscriptions (same instance).'
+    },
+    coinbaseCommerce: {
+      type: 'object',
+      description: 'Coinbase Commerce client (createCharge, getCharge, ...).'
+    },
+    paypalCheckout: {
+      type: 'object',
+      description: 'PayPal client (createOrder, getOrder, ...).'
+    },
+    emailService: {
+      type: 'object',
+      description: 'The API email templates and sender. Skips sending when email is not configured (check isConfigured()) and never throws.'
+    }
+  }}
+/>
+
+## Modules
+
+`ctx.modules.purchase` is `{ router, webhook, coinbaseWebhook, paypalWebhook }`. `router` is the same object as `ctx.routers.purchase`.
+
+<Callout type="warn" title="Webhook handlers can't be replaced">
+  The payment webhook routes are registered before plugins load, so assigning a new function to `ctx.modules.purchase.webhook` (or the Coinbase and PayPal ones) changes nothing. To act on paid orders, use [`onPurchaseFulfilled`](/docs/plugin/backend/hooks).
 </Callout>
 
 ## Examples
@@ -45,6 +182,7 @@ Every backend plugin gets a `PluginContext` object.
     module.exports = {
       name: 'status-endpoint',
       register(ctx) {
+        // GET /api/plugins/status
         ctx.routers.api.get('/plugins/status', (_req, res) => {
           res.json({ status_overview: 'success', status_message: 'OK' });
         });
@@ -78,14 +216,18 @@ Every backend plugin gets a `PluginContext` object.
     module.exports = {
       name: 'stripe-tagger',
       register(ctx) {
-        const original = ctx.services.stripe.checkout.sessions.create.bind(
-          ctx.services.stripe.checkout.sessions
-        );
-        ctx.services.stripe.checkout.sessions.create = async (params, options) => {
-          return original({ ...params, metadata: { ...params.metadata, tag: 'plugin' } }, options);
-        };
+        const sessions = ctx.services.stripe.checkout.sessions;
+        const original = sessions.create.bind(sessions);
+        sessions.create = (params, options) =>
+          original({ ...params, metadata: { ...params.metadata, tag: 'plugin' } }, options);
       }
     };
     ```
+
+    The checkout code calls the same Stripe instance, so the patch applies to every new card checkout, including subscriptions.
   </Tab>
 </Tabs>
+
+<Callout type="info" title="Preferred purchase integration point">
+  If your plugin only needs to act after a checkout is paid, use `ctx.hooks.onPurchaseFulfilled(...)`. Patch payment services only to change what is sent to the provider.
+</Callout>

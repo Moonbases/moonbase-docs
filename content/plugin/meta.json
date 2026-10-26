@@ -4,6 +4,7 @@
   "pages": [
     "index",
     "getting-started",
+    "migrating",
     "---Frontend Runtime---",
     "...frontend",
     "---Backend Runtime---",

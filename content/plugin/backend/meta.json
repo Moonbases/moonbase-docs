@@ -3,6 +3,7 @@
   "pages": [
     "overview",
     "context",
+    "routes",
     "hooks"
   ]
 }

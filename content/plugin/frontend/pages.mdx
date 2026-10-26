@@ -1,0 +1,62 @@
+---
+title: Dashboard Pages
+description: Add full pages to the dashboard under /dashboard/...
+---
+
+A plugin can add pages to the dashboard with `pages`. They render inside the dashboard shell (sidebar, top bar, sign-in check) like the core pages.
+
+```tsx
+'use client';
+
+import { useEffect, useState } from 'react';
+import { PageBody, PageHeader } from '@/components/app/page-header';
+import type { FrontendPlugin, PluginSlotProps } from '@/lib/plugins/types';
+
+function ReportsPage({ ctx }: PluginSlotProps) {
+  const [active, setActive] = useState<number | null>(null);
+
+  useEffect(() => {
+    ctx.api
+      .request('/api/plugins/license-report', { headers: { 'x-use-private': 'true' } })
+      .then((response) => response.json())
+      .then((body) => setActive(body.status_data?.active ?? null))
+      .catch(() => setActive(null));
+  }, [ctx]);
+
+  return (
+    <PageBody>
+      <PageHeader title="Reports" description="Licenses in use across the store." />
+      <p className="text-sm">{active === null ? 'No data yet.' : `${active} active licenses`}</p>
+    </PageBody>
+  );
+}
+
+const plugin: FrontendPlugin = {
+  name: 'reports',
+  pages: [{ path: '/dashboard/reports', component: ReportsPage }]
+};
+
+export default plugin;
+```
+
+The backend route behind this page is the `license-report` example in [Routes and Security](/docs/plugin/backend/routes#calling-admin-routes-from-a-frontend-plugin). Add a sidebar link with the [`dashboard.nav` slot](/docs/plugin/frontend/slots-and-portals).
+
+## How paths match
+
+- Plugin pages are served by the catch-all route `app/app/dashboard/[...plugin]/page.tsx`, so `path` must start with `/dashboard/` and have at least one more segment.
+- The match is exact: no route parameters, no trailing slash, case-sensitive. Pass extra values in the query string (`/dashboard/reports?product=…`) and read them with `ctx.route.get().search` or Next's `useSearchParams()`.
+- Core pages take precedence. Use a top-level segment no core page uses, ideally your plugin name. Taken in 2.0: `activity`, `affiliate`, `affiliates`, `analytics`, `coupons`, `developers`, `files`, `gift-cards`, `licenses`, `logs`, `orders`, `products`, `purchases`, `resellers`, `reviews`, `security`, `settings`, `store`, `subscriptions`, `support`, `teams`, `tickets`, `users`, `webhooks`, `wholesale`.
+- A `/dashboard/...` path that is neither a core nor a plugin page shows a "not found" state inside the dashboard, with a link back to the overview. In 1.8 it rendered an empty page.
+- Pages outside `/dashboard` aren't supported. Use the `global` slot for UI on storefront pages.
+
+## Access
+
+The dashboard redirects visitors who aren't signed in to the sign-in page and back. It applies no role check to plugin pages: any signed-in account, customers included, can open one by its URL. Check the role in the page if it is staff-only, and always enforce access in the backend routes it calls.
+
+## Page layout
+
+Use `PageBody` and `PageHeader` from `@/components/app/page-header`, which every core dashboard page uses. `PageHeader` takes `title`, `description`, `actions`, `badge` and a `back` link (`{ href, label }`).
+
+<Callout type="info" title="DashboardPageShell">
+  `@/components/DashboardPageShell` still exists as a deprecated wrapper for 1.x plugins: `title`, `subtitle` and `actions` map to `PageHeader`, and `trail` (breadcrumbs) is ignored. Replace it with `PageBody` and `PageHeader` when you next touch the page.
+</Callout>

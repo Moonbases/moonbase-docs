@@ -1,0 +1,209 @@
+---
+title: Routes and Security
+description: Where to register plugin routes, how to read bodies, and how to protect them.
+---
+
+import { Route, ShieldCheck, ShoppingCart } from 'lucide-react';
+
+## <Route className="inline size-4" /> Pick where a route goes
+
+<Accordions type="single" collapsible>
+  <Accordion title="ctx.routers.api, .dashboard or .purchase (most plugins)">
+    Paths are relative to the router's mount point (`/api`, `/api/dashboard`, `/api/purchase`). JSON and form bodies are already parsed, and bodies with `$`-prefixed keys are rejected before your handler runs. Your routes are added after the core routes of that router, so they can't replace a core endpoint with the same path.
+
+    ```js
+    // POST /api/plugins/notes
+    ctx.routers.api.post('/plugins/notes', ctx.core.helpers.apiAuth.public, async (req, res) => {
+      const text = String(req.body?.text ?? '').slice(0, 500);
+      res.json({ status_overview: 'success', status_data: { text } });
+    });
+    ```
+  </Accordion>
+  <Accordion title="ctx.app inside register (run before everything else)">
+    Use full paths (`/api/...`). These routes run before the v2 API, the v1 routers and the body parsers, so they can answer, or run checks and call `next()`, before a core endpoint. `req.body` is `undefined` until you add a parser to the route.
+
+    ```js
+    // A body parser from the plugin's own dependencies (see Dependencies).
+    const express = require('express');
+
+    ctx.app.post('/api/plugin/lookup', express.json(), ctx.core.helpers.apiAuth.public, async (req, res) => {
+      const { username } = req.body ?? {};
+      // ...
+    });
+    ```
+  </Accordion>
+  <Accordion title="ctx.app inside onRoutesReady (after the core routes)">
+    Routes added in an `onRoutesReady` callback sit after every core route and before the not-found handler. Bodies are parsed and filtered. Use this to mount a whole `Router` with full paths, or for catch-all routes that must not shadow core ones.
+
+    ```js
+    ctx.hooks.onRoutesReady(() => {
+      ctx.app.get('/api/plugin/health', (_req, res) => res.json({ ok: true }));
+    });
+    ```
+  </Accordion>
+</Accordions>
+
+<Callout type="warn" title="Overriding core routes">
+  A route added to `ctx.app` during `register` with the same method and path as a core route replaces that route for every client, including the storefront and loaders. Keep the response shape the core route had, apply the same guards, and re-check the override after every Moonbase update.
+</Callout>
+
+## Request bodies
+
+- `express.json()` isn't active while plugins load. Routes on `ctx.app` registered in `register` must parse their own bodies.
+- On Express 5, `req.body` is `undefined` (not `{}`) when no parser ran or the request had no body of the parser's type. Read it as `req.body ?? {}` or `req.body?.field`.
+- `req.query` is read-only, and nested query strings aren't expanded: `?filter[name]=x` gives the key `'filter[name]'`, not an object.
+
+### `$`-key filtering
+
+The API rejects request bodies containing keys that start with `$` (such as `{ "username": { "$ne": null } }`) with `400 INVALID_REQUEST`, so that a body can't turn a lookup into a MongoDB operator query.
+
+- Bodies reaching `ctx.routers.*` and routes added in `onRoutesReady` are checked by the app-wide filter.
+- On `ctx.app`, each handler you register (through `get`, `post`, `put`, `delete`, `patch`, `all`, `use` or `route()`) is wrapped and checks the body parsed so far before it runs.
+- **Not covered:** error handlers (four arguments), and `Router` instances or sub-apps you mount with `ctx.app.use(...)` during `register`. Mount those in `onRoutesReady` or on `ctx.routers.api`, or check their bodies yourself.
+
+Still validate types: `String(req.body?.id ?? '')` before using a value in a query.
+
+## <ShieldCheck className="inline size-4" /> Authentication
+
+`ctx.core.helpers.apiAuth` provides the guards the v1 API uses. Each one reads the `Authorization` (app key) and `Token` (session) headers, loads the account, and sets `req.user`.
+
+<TypeTable
+  type={{
+    'apiAuth.public': {
+      type: 'RequestHandler',
+      description: 'Public app key and a valid session of any signed-in account. What ctx.api sends by default.'
+    },
+    'apiAuth.private': {
+      type: 'RequestHandler',
+      description: 'Private app key and an admin or owner session. On legacy area paths (table below) the admin also needs that area.'
+    },
+    'apiAuth.permission(area)': {
+      type: '(area: string) => RequestHandler',
+      description: 'Private app key and an admin allowed this area (the owner always is): products, licenses, files, orders, marketing, support, users, security or logs.'
+    }
+  }}
+/>
+
+All three refuse:
+
+| Status | `status_message` | When |
+| --- | --- | --- |
+| 400 | `FAILED_AUTHENTICATION` | `Authorization` or `Token` header missing |
+| 401 | `AUTHENTICATION_FAILED` | Wrong app key for the guard |
+| 401 | `INVALID_TOKEN`, `INVALID_USER`, `TOKEN_REVOKED` | Bad or expired token, deleted account, or a token revoked by a password change or sign-out everywhere |
+| 403 | `BANNED`, `BLACKLISTED` | Banned account, or blacklisted IP |
+| 403 | `API_KEY_NOT_ALLOWED` | A store or reseller API key (`Bearer mbk_…` / `mbr_…`): those only work on the v2 endpoints made for them, never on plugin routes |
+| 503 | `DASHBOARD_NOT_INITIALIZED` | The API hasn't created its app keys yet |
+| 403 | `INSUFFICIENT_PERMISSIONS` | Not an admin, or missing the area |
+
+### Admin areas on `apiAuth.private`
+
+Since 2.0 the owner can limit each admin to specific areas. `apiAuth.private` keeps the 1.x area rules for paths in these families, whether you register the route on a v1 router (`/admin/license/report`) or on `ctx.app` (`/api/admin/license/report`). Matching ignores case.
+
+| Path starts with | Required area |
+| --- | --- |
+| `/admin/product/` | `products` |
+| `/admin/license/` | `licenses` |
+| `/admin/user/` | `users` |
+| `/admin/blacklist/` | `security` |
+| `/admin/logs/` | `logs` |
+| `/admin/orders` (also `/api/purchase/admin/orders`) | `orders` |
+| `/file/`, `/fileid/` | `files` |
+
+Any other path only needs an admin. For new routes, state the area explicitly with `apiAuth.permission('licenses')`, so a restricted admin can't reach data they can't see in the dashboard.
+
+### Calling admin routes from a frontend plugin
+
+`ctx.api` sends the public app key. For routes guarded by `apiAuth.private` or `apiAuth.permission(...)`, ask the app's proxy for the private key with the `x-use-private: true` header. The header grants nothing on its own: the route still requires an admin session.
+
+```js
+// Backend: GET /api/plugins/license-report
+const { apiAuth, limiter } = ctx.core.helpers;
+const { License } = ctx.core.models;
+
+ctx.routers.api.get('/plugins/license-report', limiter, apiAuth.permission('licenses'), async (_req, res) => {
+  const active = await License.countDocuments({ activated: true });
+  res.json({ status_overview: 'success', status_data: { active } });
+});
+```
+
+```tsx
+// Frontend: ctx.api.get() takes no options, so use request() for headers.
+const response = await ctx.api.request('/api/plugins/license-report', {
+  headers: { 'x-use-private': 'true' }
+});
+```
+
+Alternatively, guard the route with `apiAuth.public` and check the role yourself (`Number(req.user.flags) >= 1` for admins, `=== 2` for the owner). That skips the area restrictions, so use it only for data every admin may see.
+
+<Callout type="error" title="Never return req.user">
+  `req.user` is the full account document, including the password hash and security fields. Return only the fields you need.
+</Callout>
+
+### `verifyJWT`
+
+For routes that can't use the guards (no app key, optional sign-in), `verifyJWT` checks a session token on its own. It is `async`:
+
+```js
+const { verifyJWT } = ctx.core.helpers;
+
+async function optionalUser(req) {
+  const token = req.header('Token');
+  if (!token) return null;
+  const result = await verifyJWT(token);
+  if (!('decoded' in result)) return null; // { status_message, status_overview: 'failed', status_code }
+  return ctx.core.models.User.findById(result.decoded._id).select('username email flags').lean();
+}
+```
+
+It refuses (as `{ status_message, status_overview: 'failed', status_code }`) empty tokens (`INVALID_REQUEST`), bad or expired ones and other token types such as download tickets (`INVALID_TOKEN`), deleted accounts (`INVALID_USER`), banned accounts (`BANNED`) and revoked tokens (`TOKEN_REVOKED`). `decoded` holds the claims `_id`, `flags`, `banned`, `token_version`, `iat` and `exp`. `flags` is the role at sign-in, so load the account for authorization decisions. `verifyJWT` doesn't check the app key or the IP blacklist.
+
+## Errors
+
+Express 5 passes errors thrown by `async` handlers and rejected promises to the API's error handler, so a failing route answers instead of hanging. Errors outside `/api/v2` get the v1 envelope:
+
+```json
+{ "status_message": "SERVER_ERROR", "status_overview": "failed", "status_code": 500 }
+```
+
+Answer expected failures yourself with that envelope. The storefront shows `status_data.message` as the error text when your `status_message` code isn't one it translates.
+
+## <ShoppingCart className="inline size-4" /> Extending checkout
+
+The storefront starts every checkout with `POST /api/purchase/cart/checkout` (signed in) or `POST /api/purchase/guest/checkout` (guest checkout, no session). Resellers buy with `POST /api/purchase/wholesale/checkout`. The older single-product routes (`/create-session`, `/create-coinbase-charge`, `/create-paypal-order`) still exist for 1.x clients, but the 2.0 storefront doesn't call them.
+
+Frontend [checkout guards](/docs/plugin/frontend/checkout-guards) are only a convenience for shoppers. To enforce a rule, check it in the API before the core checkout handler runs. Routes added to `ctx.routers.purchase` normally run after the core ones, so move yours to the front of the router's stack:
+
+```js
+module.exports = {
+  name: 'checkout-rules',
+  register(ctx) {
+    const router = ctx.routers.purchase;
+    const runFirst = (method, path, handler) => {
+      router[method](path, handler);
+      router.stack.unshift(router.stack.pop());
+    };
+
+    const blockSecondCopy = async (req, res, next) => {
+      const items = Array.isArray(req.body?.items) ? req.body.items : [];
+      if (items.some((item) => Number(item.quantity) > 1)) {
+        res.status(403).json({
+          status_message: 'ONE_COPY_ONLY',
+          status_overview: 'failed',
+          status_code: 403,
+          status_data: { message: 'You can buy one copy of each product.' }
+        });
+        return;
+      }
+      next();
+    };
+
+    runFirst('post', '/cart/checkout', blockSecondCopy);
+    runFirst('post', '/guest/checkout', blockSecondCopy);
+  }
+};
+```
+
+The body is already parsed here. On `/guest/checkout` there is no session, so `req.user` is unset and `req.body.email` holds the buyer's email. You can also register the check on `ctx.app` during `register` with the full path (`/api/purchase/cart/checkout`), its own `express.json()` and a final `next()`.
+
+Everything after payment belongs in [`onPurchaseFulfilled`](/docs/plugin/backend/hooks).

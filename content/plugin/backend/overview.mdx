@@ -1,38 +1,42 @@
 ---
 title: Backend Runtime Overview
-description: How the API loads and runs plugins.
+description: How the API finds, loads and runs backend plugins.
 ---
 
-The backend plugin loader scans for JavaScript plugins at startup and loads them in order.
+The API loads backend plugins once, at startup, after it has connected to MongoDB and loaded the store settings, and before it starts listening. Plugins are plain JavaScript files read from disk, so you can add one without rebuilding the API.
 
 ## Plugin locations
-The loader checks these directories (first match wins):
+The loader uses the first of these folders that exists:
 
 <Steps>
-  <Step>`plugins`</Step>
-  <Step>`api/plugins`</Step>
-  <Step>the packaged plugins directory next to the loader (internal fallback)</Step>
+  <Step>The folder in `PLUGINS_DIR` (in `api/.env`), resolved from the API's working directory. If the folder doesn't exist, the loader falls through to the next locations.</Step>
+  <Step>`plugins` in the API's working directory. The start scripts run the API from `api/`, so this is `api/plugins` in the release package.</Step>
+  <Step>`apps/api/plugins` under the working directory (running from the root of a source checkout).</Step>
+  <Step>A `plugins` folder next to the compiled API (internal fallback).</Step>
 </Steps>
 
 <Callout type="info" title="Recommended location">
-  In most cases you should place plugins in `api/plugins`.
+  Put plugins in `api/plugins` (`apps/api/plugins` in a source checkout). Set `PLUGINS_DIR` only when you keep plugins outside the install, for example `PLUGINS_DIR=/srv/moonbase-plugins`.
 </Callout>
 
-<Callout type="note" title="Load order">
-  Plugins load in alphabetical order by filename.
-</Callout>
+The API logs one line per plugin it loads (`Loaded plugin <name> from <file>`), skips or fails to load. With nothing to load it logs `No plugins directory found.` or `No plugins found in plugins directory.`
 
 ## Supported files
 <Cards>
-  <Card title="File types" description="`.js`, `.cjs`, or `.mjs`" />
-  <Card title="Folder entry" description="Folder with `index.js`, `index.cjs`, or `index.mjs`" />
-  <Card title="Ignored entries" description="Names starting with `_` or `.` are skipped" />
+  <Card title="File types" description="`.js` and `.cjs` (CommonJS, loaded with require) or `.mjs` (ES module, loaded with import)" />
+  <Card title="Folder entry" description="A folder with `index.js`, `index.cjs` or `index.mjs`" />
+  <Card title="Ignored entries" description="Names starting with `_` or `.` are skipped, and so is any other file type" />
 </Cards>
 
+<Callout type="info" title="Load order">
+  Plugins load one after another in alphabetical order of their path. A plugin's `register` may be `async`: the next plugin loads only once it has finished.
+</Callout>
+
 ## Plugin shape
-<Tabs items={['Object export', 'Function export']} defaultIndex={0}>
+<Tabs items={['Object export', 'Function export', 'ES module']} defaultIndex={0}>
   <Tab>
     ```js
+    // api/plugins/my-plugin.js
     module.exports = {
       name: 'my-plugin',
       enabled: true,
@@ -45,17 +49,91 @@ The loader checks these directories (first match wins):
   </Tab>
   <Tab>
     ```js
+    // api/plugins/my-plugin.js
     module.exports = function register(ctx) {
-      // ...
+      ctx.logger.info('plugin loaded');
+    };
+    ```
+  </Tab>
+  <Tab>
+    ```js
+    // api/plugins/my-plugin.mjs
+    export default {
+      name: 'my-plugin',
+      async register(ctx) {
+        ctx.logger.info('plugin loaded');
+      }
     };
     ```
   </Tab>
 </Tabs>
 
-<Callout type="info" title="Naming and lifecycle">
-  If you omit `name`, the filename becomes the plugin name. `init(ctx)` is treated the same as `register(ctx)`.
+<TypeTable
+  type={{
+    name: {
+      type: 'string',
+      description: 'Name used in the logs. Defaults to the function name for a function export, else the file name (which is "index" for a folder plugin, so set a name there).'
+    },
+    version: {
+      type: 'string',
+      description: 'Your own release label.'
+    },
+    enabled: {
+      type: 'boolean',
+      description: 'Only the boolean false disables the plugin: the API logs that it is disabled and does not run it.',
+      default: 'true'
+    },
+    register: {
+      type: '(ctx: PluginContext) => void | Promise<void>',
+      description: 'Runs once at startup with the backend plugin context.'
+    },
+    init: {
+      type: '(ctx: PluginContext) => void | Promise<void>',
+      description: 'Used when register is missing; behaves the same.'
+    }
+  }}
+/>
+
+<Callout type="warn" title="Errors while loading">
+  If `register` throws, the API logs `Failed to load plugin <file>: <message>` and carries on without it. Anything the plugin registered before the error (routes, hooks, patches) stays in place, so validate your setup first and register routes last. A file without `register`, `init` or a function export is skipped with a warning.
 </Callout>
 
-<Callout type="note" title="Enabled flag and logs">
-  The loader logs successful and failed plugins at startup. If `enabled` is `false`, the plugin is skipped and the API logs that it is disabled.
+## Where plugins sit in the request pipeline
+
+Plugins load in the middle of the API's setup, which decides what a route sees:
+
+<Steps>
+  <Step>Client IP resolution, request context, request logging, cookies, compression and security headers.</Step>
+  <Step>Payment provider webhooks (`/api/purchase/webhook`, `/webhook/coinbase`, `/webhook/paypal`) with their raw bodies.</Step>
+  <Step>**Plugins load.** Routes added to `ctx.app` now run before every other API route, and before any body parser.</Step>
+  <Step>`express.urlencoded()` and `express.json()`.</Step>
+  <Step>The v2 API (`/api/v2`), then the `$`-key filter, then the v1 routers: `/api` (`ctx.routers.api`), `/api/dashboard` (`ctx.routers.dashboard`) and `/api/purchase` (`ctx.routers.purchase`).</Step>
+  <Step>`onRoutesReady` callbacks. Routes added to `ctx.app` here run after the core routes.</Step>
+  <Step>The not-found handler and the error handler.</Step>
+</Steps>
+
+[Routes and Security](/docs/plugin/backend/routes) explains how to pick the right place for a route.
+
+## Dependencies
+
+A plugin can `require` Node's built-in modules and any package it can resolve from its own folder. The release package ships the API as a single compiled file. Express, Mongoose and the API's other libraries are built into that file, so they aren't installed in `api/node_modules`.
+
+- **Mongoose:** always use the API's own instance: `const mongoose = ctx.core.models.User.base;`. A separately installed copy isn't connected to the database, so its queries never finish. This also applies to a source checkout run with `pnpm start`, where the API is bundled too.
+- **Other packages** (for example `axios`, or `express` for `express.json()`): make the plugin a folder with its own `package.json` and run `npm install` inside it. Don't install them into `api/` itself, because the installer runs `npm ci` there and removes packages it doesn't know about.
+
+<Files>
+  <Folder name="api" defaultOpen>
+    <Folder name="plugins" defaultOpen>
+      <Folder name="my-plugin" defaultOpen>
+        <File name="index.js" />
+        <File name="package.json" />
+        <Folder name="node_modules" />
+      </Folder>
+      <File name="example.plugin.js" />
+    </Folder>
+  </Folder>
+</Files>
+
+<Callout type="info" title="The shipped example">
+  `api/plugins/example.plugin.js` ships with `enabled: false`. Set it to `true` and restart the API to see a plugin route at `GET /api/plugin/example`.
 </Callout>

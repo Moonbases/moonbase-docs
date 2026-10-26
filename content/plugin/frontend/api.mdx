@@ -1,45 +1,116 @@
 ---
 title: Plugin Context API
-description: Use API, storage, and event helpers from plugins.
+description: Use the API, storage, event, route and checkout helpers from frontend plugins.
 ---
 
-Each plugin receives a `ctx` object through slots and bootstrap.
+Every plugin gets the same `ctx` object: as an argument to `bootstrap(ctx)` and as the `ctx` prop of slot, mount and page components.
 
-<Callout type="info" title="API helper">
-  `ctx.api` sends requests to `/api/proxy`, adds the current auth token as a `Token` header, and includes credentials.
+<TypeTable
+  type={{
+    api: {
+      type: '{ baseUrl, request, get, post, put, del }',
+      description: 'Calls the Moonbase API through the app proxy with the signed-in session.'
+    },
+    storage: {
+      type: '{ get, set, remove, getSession, setSession, removeSession, getCookie, setCookie, removeCookie }',
+      description: 'localStorage, sessionStorage and cookie helpers that never throw (reads return an empty string).'
+    },
+    events: {
+      type: '{ on, emit }',
+      description: 'In-page event bus shared by all plugins. on returns an unsubscribe function.'
+    },
+    route: {
+      type: '{ get(): { pathname, search } }',
+      description: 'The current path and query string (without the leading ?).'
+    },
+    checkout: {
+      type: '{ registerGuard(guard) }',
+      description: 'Adds a checkout guard and returns a function that removes it.'
+    },
+    logger: {
+      type: '{ info, warn, error }',
+      description: 'console methods prefixed with [plugin].'
+    }
+  }}
+/>
+
+## `ctx.api`
+
+`ctx.api` is a thin `fetch` wrapper. `baseUrl` is `/api/proxy`, the app's server-side proxy to the API, so pass the API path including `/api`:
+
+```ts
+const response = await ctx.api.get('/api/plugins/status'); // → API /api/plugins/status
+const body = await response.json();
+if (response.ok && body.status_overview === 'success') {
+  // body.status_data ...
+}
+```
+
+<TypeTable
+  type={{
+    'request(path, options?)': {
+      type: 'Promise<Response>',
+      description: 'Any method (PATCH too) and headers. A plain object or array body is sent as JSON.'
+    },
+    'get(path)': {
+      type: 'Promise<Response>',
+      description: 'GET without options. Use request() to send headers.'
+    },
+    'post(path, body?, options?)': {
+      type: 'Promise<Response>',
+      description: 'POST; body objects are sent as JSON.'
+    },
+    'put(path, body?, options?)': {
+      type: 'Promise<Response>',
+      description: 'PUT; body objects are sent as JSON.'
+    },
+    'del(path, body?, options?)': {
+      type: 'Promise<Response>',
+      description: 'DELETE; body objects are sent as JSON.'
+    }
+  }}
+/>
+
+What a request carries:
+
+- **Session.** The session token from `localStorage` (`token`) goes in the `Token` header when the visitor is signed in. Unlike the app's own API client, `ctx.api` doesn't renew an expired session: a `401` means the visitor must sign in again.
+- **App key.** The proxy adds the API's app key as `Authorization`: the public key by default, or the private key when the request has the header `x-use-private: true` (needed by `apiAuth.private` and `apiAuth.permission(...)` routes; see [Routes and Security](/docs/plugin/backend/routes#calling-admin-routes-from-a-frontend-plugin)). The `x-use-private` header itself isn't forwarded.
+- **Visitor IP.** The proxy sends the visitor's address to the API, signed with the private key. It drops client-supplied `Forwarded`, `X-Real-IP`, `X-Forwarded-*` and `X-Moonbase-*` headers, so plugins can't set those. On the API, read the address with `ctx.core.helpers.getIP(req)`.
+- **Responses** come back as they are: `ctx.api` doesn't throw on error statuses or unwrap envelopes. v1 routes (and plugin routes that follow them) answer `{ status_overview, status_message, status_data }`; v2 endpoints (`/api/v2/...`) answer `{ ok: true, data }` or `{ ok: false, error: { code, message } }`.
+
+<Callout type="info" title="Core v2 endpoints">
+  Plugins can call the core v2 API too, for example `ctx.api.get('/api/v2/account')`, as the signed-in user. v2 admin endpoints apply the account's admin areas. `GET /api/v2/openapi.json` lists the v2 endpoints; see the [admin API](/docs/api/admin-api).
 </Callout>
 
-<Tabs items={['API', 'Storage', 'Events', 'Route', 'Checkout guards']} defaultIndex={0}>
-  <Tab>
-    Use `ctx.api` to call backend endpoints through the proxy.
-  </Tab>
-  <Tab>
-    Use localStorage, sessionStorage, and cookies safely.
+## Storage, events and route
 
+<Tabs items={['Storage', 'Events', 'Route']} defaultIndex={0}>
+  <Tab>
     ```ts
-    ctx.storage.set('myKey', 'value');
-    ctx.storage.setCookie('myCookie', 'value', { maxAge: 3600 });
+    ctx.storage.set('myPlugin:seen', '1');
+    ctx.storage.setSession('myPlugin:step', '2');
+    ctx.storage.setCookie('myPlugin', 'value', { maxAge: 3600 }); // default: 1 year, path /, SameSite=Lax
+    const seen = ctx.storage.get('myPlugin:seen');
     ```
+
+    Prefix your keys with the plugin name. Moonbase keeps the session under `token`: never write or remove it.
   </Tab>
   <Tab>
-    Plugins can communicate using a simple event bus.
-
     ```ts
-    const unsubscribe = ctx.events.on('route:change', (route) => {
-      ctx.logger.info('route changed', route);
+    const unsubscribe = ctx.events.on<{ pathname: string; search: string }>('route:change', (route) => {
+      ctx.logger.info('route changed', route?.pathname);
     });
+
+    ctx.events.emit('my-plugin:ready', { at: Date.now() });
     ```
+
+    The runtime emits `route:change` with `{ pathname, search }` after each navigation. Other event names are free for plugins; errors thrown by a listener are logged and don't stop the others.
   </Tab>
   <Tab>
     ```ts
     const { pathname, search } = ctx.route.get();
     ```
   </Tab>
-  <Tab>
-    ```ts
-    ctx.checkout.registerGuard(async (context) => {
-      return true;
-    });
-    ```
-  </Tab>
 </Tabs>
+
+For checkout guards, see [Checkout Guards](/docs/plugin/frontend/checkout-guards).

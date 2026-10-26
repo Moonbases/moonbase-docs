@@ -1,20 +1,35 @@
 ---
 title: Slots and Portals
-description: Render UI from plugins without editing core pages.
+description: Render plugin UI in named slots or inside existing elements.
 ---
 
-Frontend plugins can render UI in two ways:
+Frontend plugins can put UI on existing pages in two ways: **slots**, which the app renders at fixed places, and **mounts** (portals), which attach a component to an element found by a CSS selector. For whole pages, see [Dashboard Pages](/docs/plugin/frontend/pages).
 
-<Tabs items={['Slots', 'Portals']} defaultIndex={0}>
+## Slots
+
+<TypeTable
+  type={{
+    global: {
+      type: 'slot',
+      description: 'Rendered by PluginHost after the page content on every page: storefront, sign-in and dashboard. Use it for floating UI, modals and banners.'
+    },
+    'dashboard.nav': {
+      type: 'slot',
+      description: 'Rendered at the end of the dashboard sidebar links, in the desktop sidebar and in the mobile menu. Shown to every signed-in account, customers included.'
+    }
+  }}
+/>
+
+A slot entry is a component, which receives `{ ctx, plugin }`, or a ready-made React element. Plugins render in registry order.
+
+<Tabs items={['global', 'dashboard.nav']} defaultIndex={0}>
   <Tab>
-    Slots render wherever the app includes `<PluginSlot name="..." />`. The default host already renders the `global` slot in `app/lib/plugins/PluginHost.tsx`.
-
     ```tsx
     const plugin: FrontendPlugin = {
       name: 'banner',
       slots: {
         global: () => (
-          <div className="fixed left-4 bottom-4 rounded bg-black px-3 py-2 text-white">
+          <div className="fixed bottom-4 left-4 rounded-md bg-foreground px-3 py-2 text-sm text-background">
             New plugin loaded
           </div>
         )
@@ -23,26 +38,94 @@ Frontend plugins can render UI in two ways:
     ```
   </Tab>
   <Tab>
-    Portals let plugins mount components into any DOM selector via `mounts`. The runtime uses a `MutationObserver` to wait for the element.
-
     ```tsx
+    'use client';
+
+    import Link from 'next/link';
+    import { usePathname } from 'next/navigation';
+    import { Puzzle } from 'lucide-react';
+    import type { FrontendPlugin } from '@/lib/plugins/types';
+
+    function NavLink() {
+      const active = usePathname() === '/dashboard/reports';
+      return (
+        <div className="space-y-0.5">
+          <h3 className="px-2.5 pb-1.5 text-xs text-muted-foreground">Plugins</h3>
+          <Link
+            href="/dashboard/reports"
+            className={`flex h-8 items-center gap-2.5 rounded-md px-2.5 text-[13.5px] transition-colors ${
+              active
+                ? 'bg-sidebar-accent font-medium text-foreground'
+                : 'text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-foreground'
+            }`}
+          >
+            <Puzzle className="size-4 shrink-0" />
+            <span className="truncate">Reports</span>
+          </Link>
+        </div>
+      );
+    }
+
     const plugin: FrontendPlugin = {
-      name: 'checkout-badge',
-      mounts: [
-        {
-          selector: '[data-checkout-summary]',
-          component: () => <span className="ml-2 text-xs">Verified</span>,
-          once: true,
-          order: 20
-        }
-      ]
+      name: 'reports',
+      slots: { 'dashboard.nav': NavLink }
     };
+
+    export default plugin;
     ```
+
+    The classes match the core sidebar links, so the link looks native in light and dark themes.
   </Tab>
 </Tabs>
 
-<Callout type="note" title="Selector and ordering tips">
-  - Prefer stable `data-` attributes for selectors.
-  - `once: true` stops observing after the first successful mount.
-  - `order` controls rendering order when multiple plugins target the same element.
+<Callout type="info" title="Admin-only links">
+  The `dashboard.nav` slot renders for customers too. To show a link only to staff, check the session in your component, for example with the app's `useSession()` hook (`@/lib/auth/session-context`), which exposes `isAdmin`, `isOwner` and `can(area)`. Hiding a link is cosmetic: protect the data in the API.
+</Callout>
+
+## Mounts (portals)
+
+`mounts` attach a component to an element that already exists on the page:
+
+```tsx
+const plugin: FrontendPlugin = {
+  name: 'nav-badge',
+  mounts: [
+    {
+      selector: '[data-plugin-mount="dashboard-nav"]',
+      component: ({ ctx }) => <p className="px-2.5 text-xs text-muted-foreground">Plugin note</p>,
+      order: 10
+    }
+  ]
+};
+```
+
+<TypeTable
+  type={{
+    selector: {
+      type: 'string',
+      description: 'CSS selector. Only the first matching element is used.',
+      required: true
+    },
+    component: {
+      type: 'ComponentType<{ ctx, plugin }>',
+      description: 'Rendered through a React portal into a div (data-moonbase-plugin="<name>-<index>") appended to the element.',
+      required: true
+    },
+    once: {
+      type: 'boolean',
+      description: 'When the runtime had to wait for the element, stop watching the page once it is found. Without it, the runtime keeps watching until the route changes and re-attaches if the element is replaced.',
+      default: 'false'
+    },
+    order: {
+      type: 'number',
+      description: 'Lower values mount first when several mounts target the same element.',
+      default: '0'
+    }
+  }}
+/>
+
+The runtime looks for the element again on every route change. If it isn't there yet, a `MutationObserver` waits until it appears.
+
+<Callout type="warn" title="Selectors in 2.0">
+  The storefront and dashboard were redesigned in 2.0, so selectors written for 1.x pages no longer match. The only element meant for plugins is `[data-plugin-mount="dashboard-nav"]`, the dashboard sidebar's link list. Mounts reach only the first match, which is the desktop sidebar, not the mobile menu: prefer the `dashboard.nav` slot. For anything else use the `global` slot, a [dashboard page](/docs/plugin/frontend/pages), or a selector you have checked against the current markup and re-check after each update.
 </Callout>
