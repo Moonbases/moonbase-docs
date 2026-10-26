@@ -118,8 +118,9 @@ Plugins load in the middle of the API's setup, which decides what a route sees:
 
 A plugin can `require` Node's built-in modules and any package it can resolve from its own folder. The release package ships the API as a single compiled file. Express, Mongoose and the API's other libraries are built into that file, so they aren't installed in `api/node_modules`.
 
-- **Mongoose:** always use the API's own instance: `const mongoose = ctx.core.models.User.base;`. A separately installed copy isn't connected to the database, so its queries never finish. This also applies to a source checkout run with `pnpm start`, where the API is bundled too.
-- **Other packages** (for example `axios`, or `express` for `express.json()`): make the plugin a folder with its own `package.json` and run `npm install` inside it. Don't install them into `api/` itself, because the installer runs `npm ci` there and removes packages it doesn't know about.
+- **Express:** use `ctx.express` (for example `ctx.express.json()` or `ctx.express.Router()`).
+- **Mongoose:** use `ctx.mongoose`, the API's connected instance. A separately installed copy isn't connected to the database, so its queries never finish. This also applies to a source checkout run with `pnpm start`, where the API is bundled too.
+- **Other packages** (for example `axios`): make the plugin a folder with its own `package.json` and run `npm install` inside it. Don't install them into `api/` itself, because the installer runs `npm ci` there and removes packages it doesn't know about.
 
 <Files>
   <Folder name="api" defaultOpen>

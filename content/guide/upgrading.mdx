@@ -94,7 +94,7 @@ Plugins written for 1.8 need checking before you enable them again. Full details
 **Backend plugins** run on Express 5 and Mongoose 9 (1.8 used Express 4 and Mongoose 8). `ctx.app`, `ctx.core` (controllers, models, helpers, utils) and the hooks are unchanged. Check:
 
 - `verifyJWT` now refuses banned accounts and revoked sessions, and `apiAuth.private` applies admin areas to routes registered at full `/api/...` paths too.
-- The API is one compiled file, so `require('mongoose')` or `require('express')` in a plugin doesn't load the API's copy. Use `ctx.core.models.User.base` for Mongoose, and give a plugin that needs other packages its own folder with a `package.json` (see [Plugin dependencies](/docs/plugin/backend/overview#dependencies)).
+- The API is one compiled file, so `require('mongoose')` or `require('express')` in a plugin doesn't load the API's copy. Use `ctx.express` and `ctx.mongoose` instead, and give a plugin that needs other packages its own folder with a `package.json` (see [Plugin dependencies](/docs/plugin/backend/overview#dependencies)).
 
 - Route wildcards need a name: `/files/*` becomes `/files/*path`; optional parts use braces: `/:name{.:ext}`.
 - `req.query` is read-only: don't assign to it or change it.

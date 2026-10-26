@@ -48,12 +48,13 @@ description: Accept crypto payments with Coinbase Commerce.
 | --- | --- | --- |
 | `charge:confirmed` | Yes | Delivers the order. |
 | `charge:failed` | Yes | Marks the order failed, releases its discount code and store credit, and tells the customer the payment failed. |
-| `charge:delayed` | Yes | Marks the order pending and keeps its discount code and store credit reserved. Nothing is delivered. |
+| `charge:delayed` | Yes | The customer paid after the charge expired. Marks the order pending and keeps its discount code and store credit reserved until you decide. Nothing is delivered yet, and the customer gets no failure email. |
+| `charge:resolved` | Yes | You resolved a late or unresolved charge in Coinbase Commerce: delivers the order. |
 | `charge:pending` | Optional | Keeps the discount code and store credit reserved while the payment confirms on the blockchain. |
 
 ## Good to know
 
-- Coinbase sends `charge:delayed` when a payment arrives after the charge expired. Moonbase doesn't deliver these on its own: check the payment in Coinbase Commerce, then refund it there or [grant the license by hand](/docs/guide/features/orders-and-licenses#grant-a-license).
+- Coinbase sends `charge:delayed` when a payment arrives after the charge expired, and the API log names the charge. Check it in Coinbase Commerce: **Resolve** it to deliver the order (Coinbase sends `charge:resolved`), or refund it there.
 - Coinbase refunds and disputes don't reach Moonbase. If you refund a crypto payment, use **Revoke access** on the order in **Dashboard → Orders**.
 - Crypto payments are always one-time and never get tax from Stripe Tax.
 

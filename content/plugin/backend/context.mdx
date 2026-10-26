@@ -39,6 +39,16 @@ description: Everything the backend ctx object gives a plugin.
       description: 'The v1 purchase route module (router and webhook handlers).',
       required: true
     },
+    express: {
+      type: 'typeof express',
+      description: "The API's own Express module, for ctx.express.json() and ctx.express.Router(). The release package has no separate express to require.",
+      required: true
+    },
+    mongoose: {
+      type: 'typeof mongoose',
+      description: "The API's connected Mongoose instance. Define your own models on it; a separately installed mongoose isn't connected.",
+      required: true
+    },
     logger: {
       type: '{ info, warn, error, success, debug }',
       description: 'The API logger. Each method takes a message and optional extra values.',
@@ -81,7 +91,7 @@ description: Everything the backend ctx object gives a plugin.
 
     - `File.path` holds only the file name in 2.0. The file is in the storage folder (`STORAGE_DIR`, default `api/storage`). Records uploaded before 2.0 keep an absolute path, and only its last segment counts.
     - `Dashboard` holds the API's app keys, encrypted. Never send it to a client.
-    - `ctx.core.models.User.base` is the API's Mongoose instance. Use it to define your own models (see [Dependencies](/docs/plugin/backend/overview#dependencies)).
+    - Define your own models on `ctx.mongoose`, the API's connected Mongoose instance (see [Dependencies](/docs/plugin/backend/overview#dependencies)).
   </Tab>
   <Tab>
     <TypeTable

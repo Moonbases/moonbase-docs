@@ -154,7 +154,7 @@ description: Example plugins for frontend and backend, written for Moonbase 2.0.
           name: 'notes-store',
           register(ctx) {
             // The API's own Mongoose instance, already connected.
-            const mongoose = ctx.core.models.User.base;
+            const { mongoose } = ctx;
             const noteSchema = new mongoose.Schema(
               { user: { type: String, index: true }, text: { type: String, maxlength: 500 } },
               { timestamps: true }

@@ -268,7 +268,7 @@ The signature is computed again for every attempt, so `t` changes on retries whi
 
 ## Discord channels
 
-Paste a Discord webhook URL (`https://discord.com/api/webhooks/…`, also `discordapp.com`, `ptb.discord.com` and `canary.discord.com`) as the endpoint URL and Moonbase sends a readable embed instead of the JSON event: new orders, refunds, disputes, redeemed and revoked licenses, new reviews and new customers, with the store name as the sender. These messages never mention anyone, whatever product or user names contain. Discord deliveries carry no `Moonbase-*` headers or signature, and log only the host, never the URL's token.
+Paste a Discord webhook URL (`https://discord.com/api/webhooks/…`, also `discordapp.com`, `ptb.discord.com` and `canary.discord.com`) as the endpoint URL and Moonbase sends a readable embed instead of the JSON event: new orders, refunds, disputes, redeemed and revoked licenses, failed renewals (with the date access continues until) and canceled subscriptions, new reviews and new customers, with the store name as the sender. These messages never mention anyone, whatever product or user names contain. Discord deliveries carry no `Moonbase-*` headers or signature, and log only the host, never the URL's token.
 
 ## Managing endpoints over the API
 

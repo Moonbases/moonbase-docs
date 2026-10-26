@@ -35,7 +35,7 @@ description: Common issues when plugins don't load, render or respond.
     The route uses `apiAuth.private` or `apiAuth.permission(...)` but the request carried the public key. Send `x-use-private: true` with `ctx.api.request(...)`. Also check that `PRIVATE_API_KEY` is set in `app/.env`.
   </Accordion>
   <Accordion title="Mongoose queries never finish, or time out buffering">
-    The plugin uses its own copy of Mongoose, which isn't connected. Use the API's instance: `const mongoose = ctx.core.models.User.base;`.
+    The plugin uses its own copy of Mongoose, which isn't connected. Use the API's instance: `const { mongoose } = ctx;`.
   </Accordion>
   <Accordion title="next is not a function in a schema hook">
     Mongoose 9 calls `pre` hooks without `next`. Make the hook an `async function` and throw to abort.

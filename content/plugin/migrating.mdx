@@ -135,7 +135,7 @@ schema.pre('save', async function () {
 });
 ```
 
-Check your schemas, middleware and queries against [Mongoose's migration guide to 9](https://mongoosejs.com/docs/migrating_to_9.html). Define plugin models on the API's own Mongoose instance, `ctx.core.models.User.base`. A separately required `mongoose` isn't connected (see [Dependencies](/docs/plugin/backend/overview#dependencies)).
+Check your schemas, middleware and queries against [Mongoose's migration guide to 9](https://mongoosejs.com/docs/migrating_to_9.html). Define plugin models on the API's own Mongoose instance, `ctx.mongoose`. A separately required `mongoose` isn't connected (see [Dependencies](/docs/plugin/backend/overview#dependencies)).
 
 ```js
 // 1.8
@@ -143,7 +143,7 @@ const mongoose = require('mongoose');
 const Role = mongoose.model('role', roleSchema);
 
 // 2.0
-const mongoose = ctx.core.models.User.base;
+const { mongoose } = ctx;
 const Role = mongoose.models.role ?? mongoose.model('role', roleSchema);
 ```
 
@@ -302,7 +302,7 @@ return check((context?.items ?? []).map((item) => item.productId));
   <Step>Back up `api/plugins` and `app/plugins`, and set `enabled: false` on custom plugins before upgrading.</Step>
   <Step>Search backend plugins for route paths containing `*`, `?`, `(` or `+`, and rewrite them in Express 5 syntax.</Step>
   <Step>Read `req.body` as `req.body ?? {}`, stop assigning to `req.query`, and replace `app.del`, `req.param`, `res.sendfile`, `res.json(body, status)` and `res.send(status)`.</Step>
-  <Step>Rewrite Mongoose `pre` hooks that use `next`, and define plugin models on `ctx.core.models.User.base`.</Step>
+  <Step>Rewrite Mongoose `pre` hooks that use `next`, and define plugin models on `ctx.mongoose`; parse bodies with `ctx.express.json()`.</Step>
   <Step>Resolve `File.path` against the storage folder instead of using it as a full path.</Step>
   <Step>`await verifyJWT(...)` and drop reads of `decoded.user` and `decoded.dashboard`.</Step>
   <Step>Choose an admin area for each admin route (`apiAuth.permission(area)`), and make sure no route takes MongoDB operators from the request.</Step>

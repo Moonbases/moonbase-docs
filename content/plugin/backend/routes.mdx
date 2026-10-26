@@ -23,10 +23,7 @@ import { Route, ShieldCheck, ShoppingCart } from 'lucide-react';
     Use full paths (`/api/...`). These routes run before the v2 API, the v1 routers and the body parsers, so they can answer, or run checks and call `next()`, before a core endpoint. `req.body` is `undefined` until you add a parser to the route.
 
     ```js
-    // A body parser from the plugin's own dependencies (see Dependencies).
-    const express = require('express');
-
-    ctx.app.post('/api/plugin/lookup', express.json(), ctx.core.helpers.apiAuth.public, async (req, res) => {
+    ctx.app.post('/api/plugin/lookup', ctx.express.json(), ctx.core.helpers.apiAuth.public, async (req, res) => {
       const { username } = req.body ?? {};
       // ...
     });
